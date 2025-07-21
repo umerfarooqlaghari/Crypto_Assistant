@@ -1,5 +1,8 @@
 import express from 'express';
 import cors from 'cors';
+import routes from './routes/signalRoutes';
+import priceRoutes from './routes/priceRoutes';
+import signalRoutes from './routes/signalRoutes';
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -13,7 +16,10 @@ app.use(cors({
     ],
     credentials: true,
 }))
- 
+app.use(express.json());
+app.use('api', routes)
+app.use('/api', priceRoutes)
+app.use('/api', signalRoutes);
 app.get('/', (_req, res) => {res.send('crypto assistant api')});
 
 app.listen(PORT, () => {
