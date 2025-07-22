@@ -1,6 +1,7 @@
 {
-  "name": "frontend",
-  "version": "0.1.0",
+  "name": "crypto-assistant-frontend",
+  "version": "1.0.0",
+  "description": "Professional cryptocurrency trading assistant with real-time signals and technical analysis",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",

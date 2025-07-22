@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Globe, TrendingUp, TrendingDown, Volume2 } from 'lucide-react';
+import { getApiUrl, API_CONFIG } from '../utils/api';
 
 interface MarketData {
   globalData: {
@@ -38,7 +39,7 @@ export default function MarketOverview() {
   useEffect(() => {
     const fetchMarketData = async () => {
       try {
-        const response = await fetch('http://localhost:5001/api/enhanced-signals/market-overview');
+        const response = await fetch(getApiUrl(API_CONFIG.ENDPOINTS.MARKET_OVERVIEW));
         if (response.ok) {
           const data = await response.json();
           setMarketData(data);

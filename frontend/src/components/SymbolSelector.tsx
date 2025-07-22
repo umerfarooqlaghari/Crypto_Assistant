@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Search, ChevronDown } from 'lucide-react';
+import { getApiUrl, API_CONFIG } from '../utils/api';
 
 interface Symbol {
   symbol: string;
@@ -28,7 +29,7 @@ export default function SymbolSelector({ selectedSymbol, onSymbolChange }: Symbo
   useEffect(() => {
     const fetchSymbols = async () => {
       try {
-        const response = await fetch('http://localhost:5001/api/enhanced-signals/symbols');
+        const response = await fetch(getApiUrl(API_CONFIG.ENDPOINTS.SYMBOLS));
         if (response.ok) {
           const data = await response.json();
           setSymbols(data.symbols);

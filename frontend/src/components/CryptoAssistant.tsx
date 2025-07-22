@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { Clock } from 'lucide-react';
+import { getApiUrl, getWebSocketUrl, API_CONFIG } from '../utils/api';
 import SymbolSelector from './SymbolSelector';
 import TimeframeSelector from './TimeframeSelector';
 import SignalDisplay from './SignalDisplay';
@@ -66,7 +67,7 @@ export default function CryptoAssistant() {
 
   // Initialize WebSocket connection
   useEffect(() => {
-    const newSocket = io('http://localhost:5001', {
+    const newSocket = io(getWebSocketUrl(), {
       transports: ['websocket', 'polling']
     });
 
@@ -122,7 +123,10 @@ export default function CryptoAssistant() {
 
     try {
       const response = await fetch(
-        `http://localhost:5001/api/enhanced-signals/advanced?symbol=${selectedSymbol}&timeframe=${selectedTimeframe}`
+        getApiUrl(API_CONFIG.ENDPOINTS.ADVANCED_SIGNALS, {
+          symbol: selectedSymbol,
+          timeframe: selectedTimeframe
+        })
       );
 
       if (response.ok) {
