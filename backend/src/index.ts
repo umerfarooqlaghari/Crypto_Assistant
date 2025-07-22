@@ -1,12 +1,19 @@
 import express from 'express';
 import cors from 'cors';
+import { createServer } from 'http';
 import { config } from './config/config';
 import { logger } from './utils/logger';
 import priceRoutes from './routes/priceRoutes';
 import signalRoutes from './routes/signalRoutes';
 import signalExchangePriceRoutes from './routes/signalExchangePriceRoutes';
+import enhancedSignalRoutes from './routes/enhancedSignalRoutes';
+import { RealTimeDataService } from './Services/realTimeDataService';
 
 const app = express();
+const server = createServer(app);
+
+// Initialize real-time data service with WebSocket support
+const realTimeService = new RealTimeDataService(server);
 
 // CORS configuration
 app.use(cors({
@@ -36,6 +43,7 @@ app.get('/health', (_req, res) => {
 // API routes
 app.use('/api/prices', priceRoutes);
 app.use('/api/signals', signalRoutes);
+app.use('/api/enhanced-signals', enhancedSignalRoutes);
 app.use('/api/exchange-prices', signalExchangePriceRoutes);
 // app.use('/api/portfolio', portfolioRoutes);
 // app.use('/api/exchanges', exchangeRoutes);
@@ -64,16 +72,19 @@ app.use((_req, res) => {
 // Graceful shutdown
 process.on('SIGTERM', () => {
     logger.info('SIGTERM received, shutting down gracefully');
+    realTimeService.shutdown();
     process.exit(0);
 });
 
 process.on('SIGINT', () => {
     logger.info('SIGINT received, shutting down gracefully');
+    realTimeService.shutdown();
     process.exit(0);
 });
 
-app.listen(config.port, () => {
+server.listen(config.port, () => {
     logger.info(`🚀 Server started on port ${config.port} in ${config.nodeEnv} mode`);
+    logger.info(`📡 WebSocket server running for real-time data`);
 });
 
 export default app;
