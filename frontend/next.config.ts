@@ -9,7 +9,13 @@ const nextConfig: NextConfig = {
   // Image optimization
   images: {
     domains: ['localhost'],
-    unoptimized: true
+    unoptimized: false,
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
+    ],
   },
 
   // Disable x-powered-by header
@@ -17,6 +23,24 @@ const nextConfig: NextConfig = {
 
   // Enable compression
   compress: true,
+
+  // Ensure CSS is properly handled
+  experimental: {
+    optimizePackageImports: ['lucide-react'],
+  },
+
+  // Webpack configuration for better compatibility
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+      };
+    }
+    return config;
+  },
 };
 
 export default nextConfig;
