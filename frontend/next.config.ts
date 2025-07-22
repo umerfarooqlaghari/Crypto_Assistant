@@ -1,9 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Enable static optimization
-  output: 'standalone',
-
   // Environment variables
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001',
@@ -13,6 +10,11 @@ const nextConfig: NextConfig = {
   images: {
     domains: ['localhost'],
     unoptimized: true
+  },
+
+  // Ensure CSS is properly handled
+  experimental: {
+    optimizeCss: true,
   },
 
   // Disable x-powered-by header
