@@ -12,52 +12,11 @@ const nextConfig: NextConfig = {
     unoptimized: true
   },
 
-  // Ensure CSS is properly handled
-  experimental: {
-    optimizeCss: true,
-  },
-
   // Disable x-powered-by header
   poweredByHeader: false,
 
   // Enable compression
   compress: true,
-
-  // Webpack configuration
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        fs: false,
-        net: false,
-        tls: false,
-      };
-    }
-    return config;
-  },
-
-  // Headers for security and CORS
-  async headers() {
-    return [
-      {
-        source: '/(.*)',
-        headers: [
-          {
-            key: 'X-Frame-Options',
-            value: 'DENY'
-          },
-          {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff'
-          },
-          {
-            key: 'Referrer-Policy',
-            value: 'strict-origin-when-cross-origin'
-          }
-        ]
-      }
-    ];
-  }
 };
 
 export default nextConfig;
