@@ -3,13 +3,11 @@ services:
     name: crypto-assistant-backend
     env: node
     plan: free
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci && npm run build
     startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 5001
       - key: CORS_ORIGINS
         value: https://crypto-assistant-tan.vercel.app,http://localhost:3000
       - key: JWT_SECRET

@@ -17,7 +17,27 @@ const realTimeService = new RealTimeDataService(server);
 
 // CORS configuration
 app.use(cors({
-    origin: config.cors.allowedOrigins,
+    origin: (origin, callback) => {
+        // Allow requests with no origin (mobile apps, etc.)
+        if (!origin) return callback(null, true);
+
+        // Check if origin is in allowed list
+        if (config.cors.allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+
+        // Allow all Vercel preview URLs
+        if (origin.includes('vercel.app')) {
+            return callback(null, true);
+        }
+
+        // Allow localhost for development
+        if (origin.includes('localhost')) {
+            return callback(null, true);
+        }
+
+        callback(new Error('Not allowed by CORS'));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
