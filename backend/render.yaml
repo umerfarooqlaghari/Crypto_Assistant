@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: crypto-assistant-backend
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5001
+      - key: CORS_ORIGINS
+        value: https://crypto-assistant-tan.vercel.app,http://localhost:3000
+      - key: JWT_SECRET
+        generateValue: true
+      - key: LOG_LEVEL
+        value: info
+      - key: RATE_LIMIT_WINDOW_MS
+        value: 900000
+      - key: RATE_LIMIT_MAX_REQUESTS
+        value: 100
+      - key: WS_PORT
+        value: 5002
+      - key: SIGNAL_UPDATE_INTERVAL
+        value: 60000
+      - key: MAX_CANDLE_HISTORY
+        value: 1000

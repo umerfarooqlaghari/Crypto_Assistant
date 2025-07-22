@@ -10,7 +10,7 @@ const coinGeckoService = new CoinGeckoService();
 const technicalAnalysis = new AdvancedTechnicalAnalysis();
 
 // Get all available trading symbols
-export const getAvailableSymbols = async (req: Request, res: Response) => {
+export const getAvailableSymbols = async (_req: Request, res: Response) => {
     try {
         logInfo('Fetching available trading symbols');
         
@@ -100,7 +100,7 @@ export const generateAdvancedSignals = async (req: Request, res: Response) => {
             tradingSignal.confidence
         );
 
-        res.json({
+        return res.json({
             symbol,
             timeframe,
             timestamp: new Date().toISOString(),
@@ -147,7 +147,10 @@ export const generateAdvancedSignals = async (req: Request, res: Response) => {
         });
     } catch (error: any) {
         logError(`Error generating advanced signals for ${req.query.symbol}`, error);
-        throw new ExchangeError(`Error generating advanced signals: ${error?.message || 'Unknown error'}`, 'signal-service');
+        return res.status(500).json({
+            error: 'Internal server error',
+            message: `Error generating advanced signals: ${error?.message || 'Unknown error'}`
+        });
     }
 };
 
@@ -223,7 +226,7 @@ export const getMultiTimeframeAnalysis = async (req: Request, res: Response) => 
 
         const avgConfidence = validResults.reduce((sum, r) => sum + r.confidence, 0) / validResults.length;
 
-        res.json({
+        return res.json({
             symbol,
             timestamp: new Date().toISOString(),
             consensus: {
@@ -235,12 +238,15 @@ export const getMultiTimeframeAnalysis = async (req: Request, res: Response) => 
         });
     } catch (error: any) {
         logError(`Error generating multi-timeframe analysis for ${req.query.symbol}`, error);
-        throw new ExchangeError(`Error generating multi-timeframe analysis: ${error?.message || 'Unknown error'}`, 'analysis-service');
+        return res.status(500).json({
+            error: 'Internal server error',
+            message: `Error generating multi-timeframe analysis: ${error?.message || 'Unknown error'}`
+        });
     }
 };
 
 // Get market overview with top movers
-export const getMarketOverview = async (req: Request, res: Response) => {
+export const getMarketOverview = async (_req: Request, res: Response) => {
     try {
         logInfo('Fetching market overview');
 

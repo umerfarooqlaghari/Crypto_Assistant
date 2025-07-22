@@ -1,17 +1,22 @@
 {
-  "name": "backend",
+  "name": "crypto-assistant-backend",
   "version": "1.0.0",
-  "main": "index.js",
+  "description": "Professional cryptocurrency trading assistant backend with real-time signals and technical analysis",
+  "main": "dist/index.js",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "ts-node-dev --respawn src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "postbuild": "echo 'Build completed successfully'",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": ["crypto", "trading", "signals", "technical-analysis", "api"],
+  "author": "Crypto Assistant Team",
   "license": "ISC",
-  "description": "",
   "dependencies": {
     "axios": "^1.10.0",
     "ccxt": "^4.4.95",
