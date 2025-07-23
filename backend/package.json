@@ -14,10 +14,17 @@
     "postbuild": "echo 'Build completed successfully'",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["crypto", "trading", "signals", "technical-analysis", "api"],
+  "keywords": [
+    "crypto",
+    "trading",
+    "signals",
+    "technical-analysis",
+    "api"
+  ],
   "author": "Crypto Assistant Team",
   "license": "ISC",
   "dependencies": {
+    "@prisma/client": "^6.12.0",
     "axios": "^1.10.0",
     "ccxt": "^4.4.95",
     "compression": "^1.8.1",
@@ -27,24 +34,25 @@
     "express-rate-limit": "^8.0.1",
     "helmet": "^8.1.0",
     "joi": "^17.13.3",
-    "uuid": "^11.1.0",
-    "winston": "^3.17.0",
-    "ws": "^8.18.0",
+    "lodash": "^4.17.21",
+    "node-cron": "^3.0.3",
+    "prisma": "^6.12.0",
     "socket.io": "^4.8.1",
     "technicalindicators": "^3.1.0",
-    "node-cron": "^3.0.3",
-    "lodash": "^4.17.21"
+    "uuid": "^11.1.0",
+    "winston": "^3.17.0",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
     "@types/helmet": "^0.0.48",
+    "@types/lodash": "^4.17.13",
     "@types/node": "^24.0.15",
+    "@types/node-cron": "^3.0.11",
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.5.13",
-    "@types/lodash": "^4.17.13",
-    "@types/node-cron": "^3.0.11",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.8.3"
   }

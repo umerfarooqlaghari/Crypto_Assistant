@@ -38,30 +38,14 @@ export const getExchangeInfo = async (req: Request, res: Response): Promise<void
       throw new ValidationError(`Exchange ${exchange} is not supported`);
     }
 
-    // Mock exchange info - in production, fetch from exchange API
+    // For now, return basic exchange info without hardcoded data
+    // In production, this would fetch real data from exchange APIs
     const exchangeInfo = {
       id: exchange,
       name: exchange.charAt(0).toUpperCase() + exchange.slice(1),
-      country: getExchangeCountry(exchange),
-      founded: getExchangeFounded(exchange),
       website: `https://${exchange}.com`,
-      fees: {
-        trading: {
-          maker: 0.1,
-          taker: 0.1,
-        },
-        withdrawal: 'varies',
-      },
-      limits: {
-        minTrade: 10,
-        maxTrade: 1000000,
-      },
-      features: {
-        spot: true,
-        futures: exchange !== 'bitstamp',
-        options: ['binance', 'okx'].includes(exchange),
-        margin: ['binance', 'kraken', 'bitfinex'].includes(exchange),
-      },
+      status: 'operational', // This could be fetched from exchange status API
+      message: 'Exchange information would be fetched from real APIs in production'
     };
 
     res.json(exchangeInfo);
@@ -107,7 +91,8 @@ export const getExchangeMarkets = async (req: Request, res: Response): Promise<v
       throw new ValidationError(`Exchange ${exchange} is not supported`);
     }
 
-    // Mock markets data - in production, fetch from exchange API
+    // For now, return basic market info without hardcoded limits/precision
+    // In production, this would fetch real market data from exchange APIs
     const markets = config.defaultTradingPairs.map(pair => ({
       symbol: pair,
       base: pair.split('/')[0],
@@ -116,14 +101,7 @@ export const getExchangeMarkets = async (req: Request, res: Response): Promise<v
       type,
       spot: type === 'spot',
       future: type === 'future',
-      precision: {
-        amount: 8,
-        price: 2,
-      },
-      limits: {
-        amount: { min: 0.001, max: 1000000 },
-        price: { min: 0.01, max: 1000000 },
-      },
+      // Real precision and limits would be fetched from exchange API
     }));
 
     res.json({
@@ -509,35 +487,4 @@ export const healthCheckAllExchanges = async (req: Request, res: Response): Prom
   }
 };
 
-// Helper functions
-function getExchangeCountry(exchange: string): string {
-  const countries: { [key: string]: string } = {
-    binance: 'Malta',
-    coinbase: 'United States',
-    kraken: 'United States',
-    bitfinex: 'British Virgin Islands',
-    bitstamp: 'Luxembourg',
-    kucoin: 'Seychelles',
-    bybit: 'Singapore',
-    okx: 'Malta',
-    huobi: 'Singapore',
-    gate: 'Cayman Islands',
-  };
-  return countries[exchange] || 'Unknown';
-}
 
-function getExchangeFounded(exchange: string): number {
-  const founded: { [key: string]: number } = {
-    binance: 2017,
-    coinbase: 2012,
-    kraken: 2011,
-    bitfinex: 2012,
-    bitstamp: 2011,
-    kucoin: 2017,
-    bybit: 2018,
-    okx: 2013,
-    huobi: 2013,
-    gate: 2013,
-  };
-  return founded[exchange] || 2020;
-}

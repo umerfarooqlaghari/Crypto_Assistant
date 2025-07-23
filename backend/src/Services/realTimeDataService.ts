@@ -4,6 +4,7 @@ import cron from 'node-cron';
 import { BinanceService, BinanceTicker } from './binanceService';
 import { CoinGeckoService } from './coinGeckoService';
 import { AdvancedTechnicalAnalysis, TradingSignal } from './advancedTechnicalAnalysis';
+import { CoinListService } from './coinListService';
 import { logDebug, logError, logInfo } from '../utils/logger';
 import { config } from '../config/config';
 
@@ -56,6 +57,11 @@ export class RealTimeDataService {
     this.startDataUpdates();
     
     logInfo('Real-time data service initialized');
+  }
+
+  // Getter for socket.io instance
+  public getSocketIO(): SocketIOServer {
+    return this.io;
   }
 
   private initializeSocketHandlers() {
@@ -325,6 +331,26 @@ export class RealTimeDataService {
     });
   }
 
+  // Broadcast coin list updates to all connected clients
+  broadcastCoinListUpdate(coinListData: any[]) {
+    this.io.emit('coinListUpdate', {
+      data: coinListData,
+      timestamp: Date.now()
+    });
+    logDebug(`Broadcasted coin list update to ${this.io.sockets.sockets.size} clients`);
+  }
+
+  // Broadcast individual coin price updates for coin list
+  broadcastCoinPriceUpdate(symbol: string, price: number, priceChange24h: number, volume: number) {
+    this.io.emit('coinPriceUpdate', {
+      symbol,
+      price,
+      priceChange24h,
+      volume,
+      timestamp: Date.now()
+    });
+  }
+
   // Public methods for external access
   async getSymbolData(symbol: string): Promise<RealTimeData | null> {
     const cached = this.dataCache.get(symbol.toUpperCase());
@@ -349,9 +375,7 @@ export class RealTimeDataService {
     return Array.from(this.activeSymbols);
   }
 
-  getConnectedClients(): number {
-    return this.subscriptions.size;
-  }
+
 
   // Subscribe to new symbols in Binance WebSocket
   private subscribeToNewSymbols(symbols: string[]) {
@@ -378,6 +402,15 @@ export class RealTimeDataService {
     });
 
     logInfo(`Subscribed to real-time data for new symbols: ${symbols.join(', ')}`);
+  }
+
+  // Get the Socket.IO instance for external use
+  getIO(): SocketIOServer {
+    return this.io;
+  }
+
+  getConnectedClients(): number {
+    return this.io.sockets.sockets.size;
   }
 
   // Cleanup method

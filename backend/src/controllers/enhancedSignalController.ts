@@ -2,12 +2,14 @@ import { Request, Response } from 'express';
 import { BinanceService } from '../Services/binanceService';
 import { CoinGeckoService } from '../Services/coinGeckoService';
 import { AdvancedTechnicalAnalysis } from '../Services/advancedTechnicalAnalysis';
+import EnhancedSignalOrchestrator from '../Services/enhancedSignalOrchestrator';
 import { logSignalGeneration, logError, logInfo } from '../utils/logger';
 import { ExchangeError } from '../middleware/errorHandler';
 
 const binanceService = new BinanceService();
 const coinGeckoService = new CoinGeckoService();
 const technicalAnalysis = new AdvancedTechnicalAnalysis();
+const signalOrchestrator = new EnhancedSignalOrchestrator();
 
 // Get all available trading symbols
 export const getAvailableSymbols = async (_req: Request, res: Response) => {
@@ -300,5 +302,116 @@ export const getMarketOverview = async (_req: Request, res: Response) => {
     } catch (error: any) {
         logError('Error fetching market overview', error);
         throw new ExchangeError(`Error fetching market overview: ${error?.message || 'Unknown error'}`, 'market-service');
+    }
+};
+
+// Enhanced signal processing with configurable thresholds and notifications
+export const generateEnhancedSignalWithNotifications = async (req: Request, res: Response) => {
+    try {
+        const { symbol, timeframe = '1h', exchange = 'binance' } = req.query;
+
+        if (!symbol) {
+            throw new ExchangeError('Symbol parameter is required', 'validation');
+        }
+
+        logInfo(`Generating enhanced signal with notifications for ${symbol} ${timeframe}`);
+
+        const result = await signalOrchestrator.processSignal(
+            symbol as string,
+            timeframe as string,
+            exchange as string
+        );
+
+        res.json({
+            success: true,
+            data: result,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error: any) {
+        logError('Error generating enhanced signal', error);
+        throw new ExchangeError(`Error generating enhanced signal: ${error?.message || 'Unknown error'}`, 'enhanced-signal-service');
+    }
+};
+
+// Multi-timeframe analysis with notifications
+export const generateMultiTimeframeWithNotifications = async (req: Request, res: Response) => {
+    try {
+        const { symbol, timeframes, exchange = 'binance' } = req.query;
+
+        if (!symbol) {
+            throw new ExchangeError('Symbol parameter is required', 'validation');
+        }
+
+        const customTimeframes = timeframes ? (timeframes as string).split(',') : undefined;
+
+        logInfo(`Generating multi-timeframe analysis with notifications for ${symbol}`);
+
+        const result = await signalOrchestrator.processMultiTimeframeSignal(
+            symbol as string,
+            customTimeframes,
+            exchange as string
+        );
+
+        res.json({
+            success: true,
+            data: result,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error: any) {
+        logError('Error generating multi-timeframe analysis', error);
+        throw new ExchangeError(`Error generating multi-timeframe analysis: ${error?.message || 'Unknown error'}`, 'multi-timeframe-service');
+    }
+};
+
+// Batch process multiple symbols
+export const processBatchSignals = async (req: Request, res: Response) => {
+    try {
+        const { symbols, timeframe = '1h', exchange = 'binance' } = req.body;
+
+        if (!symbols || !Array.isArray(symbols)) {
+            throw new ExchangeError('Symbols array is required in request body', 'validation');
+        }
+
+        logInfo(`Processing batch signals for ${symbols.length} symbols`);
+
+        const results = await signalOrchestrator.processBatchSignals(
+            symbols,
+            timeframe,
+            exchange
+        );
+
+        res.json({
+            success: true,
+            data: {
+                results,
+                summary: {
+                    total: symbols.length,
+                    successful: results.filter(r => r.saved).length,
+                    totalNotifications: results.reduce((sum, r) => sum + r.notifications.length, 0)
+                }
+            },
+            timestamp: new Date().toISOString()
+        });
+    } catch (error: any) {
+        logError('Error processing batch signals', error);
+        throw new ExchangeError(`Error processing batch signals: ${error?.message || 'Unknown error'}`, 'batch-signal-service');
+    }
+};
+
+// Get processing statistics
+export const getProcessingStats = async (req: Request, res: Response) => {
+    try {
+        const { days = 7 } = req.query;
+
+        const stats = await signalOrchestrator.getProcessingStats(parseInt(days as string));
+
+        res.json({
+            success: true,
+            data: stats,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error: any) {
+        logError('Error fetching processing stats', error);
+        throw new ExchangeError(`Error fetching processing stats: ${error?.message || 'Unknown error'}`, 'stats-service');
     }
 };

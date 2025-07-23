@@ -1,0 +1,122 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Admin Settings for configurable thresholds and rules
+model AdminSettings {
+  id                    String   @id @default(cuid())
+  settingKey           String   @unique
+  settingValue         String
+  settingType          String   // 'number', 'string', 'boolean', 'json'
+  description          String?
+  category             String   // 'confidence', 'strength', 'timeframe', 'notification'
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@map("admin_settings")
+}
+
+// Notification Rules for determining when to trigger alerts
+model NotificationRule {
+  id                   String   @id @default(cuid())
+  name                 String
+  description          String?
+  isActive             Boolean  @default(true)
+
+  // Rule conditions
+  minConfidence        Float?   // Minimum confidence percentage (0-100)
+  minStrength          Float?   // Minimum signal strength (0-100)
+  requiredTimeframes   Int?     // Number of timeframes that must agree
+  requiredSignalType   String?  // 'BUY', 'SELL', 'HOLD', or null for any
+
+  // Advanced rule logic (JSON format for complex conditions)
+  advancedConditions   Json?    // For complex rules like "3 out of 5 timeframes show BUY with 70%+ confidence"
+
+  // Notification settings
+  enableSound          Boolean  @default(true)
+  enableVisual         Boolean  @default(true)
+  priority             String   @default("MEDIUM") // 'LOW', 'MEDIUM', 'HIGH'
+
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  // Relations
+  triggeredNotifications Notification[]
+
+  @@map("notification_rules")
+}
+
+// Signal History for storing all generated signals
+model SignalHistory {
+  id                   String   @id @default(cuid())
+  symbol               String
+  exchange             String   @default("binance")
+  timeframe            String
+
+  // Signal data
+  signal               String   // 'BUY', 'SELL', 'HOLD'
+  confidence           Float    // 0-100
+  strength             Float    // 0-100
+  currentPrice         Float
+
+  // Technical analysis data
+  technicalIndicators  Json?    // RSI, MACD, etc.
+  chartPatterns        Json?    // Detected chart patterns
+  candlestickPatterns  Json?    // Detected candlestick patterns
+  reasoning            Json?    // Array of reasoning strings
+
+  // Metadata
+  generatedAt          DateTime @default(now())
+  processingTimeMs     Int?     // Time taken to generate signal
+
+  // Relations
+  triggeredNotifications Notification[]
+
+  @@map("signal_history")
+  @@index([symbol, timeframe, generatedAt])
+  @@index([signal, confidence, generatedAt])
+}
+
+// Notifications triggered by the system
+model Notification {
+  id                   String   @id @default(cuid())
+
+  // Notification content
+  title                String
+  message              String
+  type                 String   // 'STRONG_SIGNAL', 'ALERT', 'WARNING'
+  priority             String   // 'LOW', 'MEDIUM', 'HIGH'
+
+  // Signal data (stored directly for quick access)
+  symbol               String?  // Coin symbol that triggered the notification
+  signal               String?  // 'BUY', 'SELL', 'HOLD'
+  confidence           Float?   // Confidence percentage (0-100)
+  strength             Float?   // Signal strength (0-100)
+  timeframe            String?  // Timeframe that triggered the notification
+
+  // Notification settings
+  hasVisual            Boolean  @default(true)
+  isRead               Boolean  @default(false)
+
+  // Relations
+  ruleId               String?
+  rule                 NotificationRule? @relation(fields: [ruleId], references: [id])
+  signalId             String?
+  signalHistory        SignalHistory? @relation(fields: [signalId], references: [id])
+
+  createdAt            DateTime @default(now())
+  readAt               DateTime?
+
+  @@map("notifications")
+  @@index([createdAt, isRead])
+  @@index([type, priority, createdAt])
+  @@index([symbol, signal, createdAt])
+}

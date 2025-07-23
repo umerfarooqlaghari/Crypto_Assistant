@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { Clock } from 'lucide-react';
+import { Clock, List, BarChart3 } from 'lucide-react';
+import Link from 'next/link';
 import { getApiUrl, getWebSocketUrl, API_CONFIG } from '../utils/api';
 import SymbolSelector from './SymbolSelector';
 import TimeframeSelector from './TimeframeSelector';
@@ -47,8 +48,12 @@ interface SignalData {
   };
 }
 
-export default function CryptoAssistant() {
-  const [selectedSymbol, setSelectedSymbol] = useState('BTCUSDT');
+interface CryptoAssistantProps {
+  initialSymbol?: string;
+}
+
+export default function CryptoAssistant({ initialSymbol = 'BTCUSDT' }: CryptoAssistantProps) {
+  const [selectedSymbol, setSelectedSymbol] = useState(initialSymbol);
   const [selectedTimeframe, setSelectedTimeframe] = useState('1h');
   const [signalData, setSignalData] = useState<SignalData | null>(null);
   const [realTimeData, setRealTimeData] = useState<RealTimeData | null>(null);
@@ -203,9 +208,15 @@ export default function CryptoAssistant() {
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-3xl md:text-4xl font-bold text-white">
-            Crypto Assistant
-          </h1>
+          <div className="flex items-center gap-4">
+            <Link href="/" className="flex items-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors">
+              <List className="w-4 h-4" />
+              Back to Coin List
+            </Link>
+            <h1 className="text-3xl md:text-4xl font-bold text-white">
+              Crypto Analysis
+            </h1>
+          </div>
           <div className="flex items-center gap-2">
             <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-400' : 'bg-red-400'}`} />
             <span className="text-sm text-gray-300">
@@ -264,15 +275,59 @@ export default function CryptoAssistant() {
 
       {/* Signal Display */}
       {signalData && signalData.signal && signalData.technicalIndicators && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          <div className="lg:col-span-2">
-            <SignalDisplay signalData={signalData} loading={loading} />
+        <div className="space-y-6 mb-6">
+          {/* Main Signal and Trading Levels */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <SignalDisplay signalData={signalData} loading={loading} />
+            </div>
+            <div>
+              <TechnicalIndicators
+                indicators={signalData.technicalIndicators}
+                currentPrice={realTimeData?.price || signalData?.currentPrice || 0}
+              />
+            </div>
           </div>
-          <div>
-            <TechnicalIndicators
-              indicators={signalData.technicalIndicators}
-              currentPrice={realTimeData?.price || signalData?.currentPrice || 0}
-            />
+
+          {/* Trading Summary Card */}
+          <div className="bg-gradient-to-br from-gray-800/90 to-black/90 backdrop-blur-md rounded-xl p-6 border border-gray-600/30 shadow-xl">
+            <h3 className="text-xl font-semibold text-gray-100 mb-4 flex items-center gap-2">
+              <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+              Trading Summary
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="text-center p-3 bg-gray-700/30 rounded-lg">
+                <div className="text-sm text-gray-400 mb-1">Risk/Reward</div>
+                <div className="text-lg font-semibold text-white">
+                  {signalData.signal.stopLoss && signalData.signal.takeProfit1 ?
+                    (((signalData.signal.takeProfit1 - signalData.signal.entry) / (signalData.signal.entry - signalData.signal.stopLoss))).toFixed(2) :
+                    'N/A'
+                  }
+                </div>
+              </div>
+              <div className="text-center p-3 bg-gray-700/30 rounded-lg">
+                <div className="text-sm text-gray-400 mb-1">Potential Gain</div>
+                <div className="text-lg font-semibold text-green-400">
+                  {signalData.signal.takeProfit1 ?
+                    `${(((signalData.signal.takeProfit1 - signalData.signal.entry) / signalData.signal.entry) * 100).toFixed(1)}%` :
+                    'N/A'
+                  }
+                </div>
+              </div>
+              <div className="text-center p-3 bg-gray-700/30 rounded-lg">
+                <div className="text-sm text-gray-400 mb-1">Max Risk</div>
+                <div className="text-lg font-semibold text-red-400">
+                  {signalData.signal.stopLoss ?
+                    `${(((signalData.signal.entry - signalData.signal.stopLoss) / signalData.signal.entry) * 100).toFixed(1)}%` :
+                    'N/A'
+                  }
+                </div>
+              </div>
+              <div className="text-center p-3 bg-gray-700/30 rounded-lg">
+                <div className="text-sm text-gray-400 mb-1">Timeframe</div>
+                <div className="text-lg font-semibold text-white">{signalData.timeframe}</div>
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -7,13 +7,31 @@ import priceRoutes from './routes/priceRoutes';
 import signalRoutes from './routes/signalRoutes';
 import signalExchangePriceRoutes from './routes/signalExchangePriceRoutes';
 import enhancedSignalRoutes from './routes/enhancedSignalRoutes';
+import coinListRoutes from './routes/coinListRoutes';
+import adminRoutes from './routes/adminRoutes';
+import notificationRoutes from './routes/notificationRoutes';
 import { RealTimeDataService } from './Services/realTimeDataService';
+import { cleanupCoinListService, setRealTimeService } from './controllers/coinListController';
+import prismaService from './Services/prismaService';
+import DefaultSettingsService from './Services/defaultSettingsService';
+import { notificationRuleChecker } from './Services/notificationRuleChecker';
 
 const app = express();
 const server = createServer(app);
 
 // Initialize real-time data service with WebSocket support
 const realTimeService = new RealTimeDataService(server);
+
+// Connect coin list service to real-time service for broadcasting updates
+setRealTimeService(realTimeService);
+
+// Initialize coin list service immediately to start background updates
+import { getCoinListService } from './controllers/coinListController';
+const coinListService = getCoinListService();
+console.log('🔄 Coin list service initialized - background updates started');
+
+// Connect notification rule checker to socket.io for real-time notifications
+notificationRuleChecker.setSocketIO(realTimeService.getSocketIO());
 
 // CORS configuration
 app.use(cors({
@@ -65,6 +83,9 @@ app.use('/api/prices', priceRoutes);
 app.use('/api/signals', signalRoutes);
 app.use('/api/enhanced-signals', enhancedSignalRoutes);
 app.use('/api/exchange-prices', signalExchangePriceRoutes);
+app.use('/api/coin-list', coinListRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/notifications', notificationRoutes);
 // app.use('/api/portfolio', portfolioRoutes);
 // app.use('/api/exchanges', exchangeRoutes);
 
@@ -90,21 +111,46 @@ app.use((_req, res) => {
 // app.use(errorHandler);
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
-    logger.info('SIGTERM received, shutting down gracefully');
-    realTimeService.shutdown();
+const gracefulShutdown = async () => {
+    logger.info('Shutting down gracefully...');
+    try {
+        realTimeService.shutdown();
+        cleanupCoinListService();
+        await prismaService.disconnect();
+        logger.info('Database disconnected successfully');
+    } catch (error) {
+        logger.error('Error during shutdown:', error);
+    }
     process.exit(0);
-});
+};
 
-process.on('SIGINT', () => {
-    logger.info('SIGINT received, shutting down gracefully');
-    realTimeService.shutdown();
-    process.exit(0);
-});
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);
 
-server.listen(config.port, () => {
-    logger.info(`🚀 Server started on port ${config.port} in ${config.nodeEnv} mode`);
-    logger.info(`📡 WebSocket server running for real-time data`);
-});
+// Start server with database initialization
+const startServer = async () => {
+    try {
+        // Initialize database connection
+        await prismaService.connect();
+        logger.info('📊 Database connected successfully');
+
+        // Initialize default settings if needed
+        await DefaultSettingsService.initializeDefaultSettings();
+        logger.info('⚙️ Default settings initialized');
+
+        // Start the server
+        server.listen(config.port, () => {
+            logger.info(`🚀 Server started on port ${config.port} in ${config.nodeEnv} mode`);
+            logger.info(`📡 WebSocket server running for real-time data`);
+            logger.info(`🔧 Admin panel available at http://localhost:${config.port}/api/admin`);
+        });
+    } catch (error) {
+        logger.error('Failed to start server:', error);
+        process.exit(1);
+    }
+};
+
+// Start the server
+startServer();
 
 export default app;

@@ -128,10 +128,50 @@ export class BinanceService {
 
       // Update cache
       this.priceCache.set(symbol, ticker);
-      
+
       return ticker;
     } catch (error) {
       logError(`Error fetching 24hr ticker for ${symbol}`, error as Error);
+      throw error;
+    }
+  }
+
+  // Get all 24hr ticker statistics in bulk (more efficient for coin list)
+  async getAllTickers24hr(): Promise<BinanceTicker[]> {
+    try {
+      logDebug('Fetching all 24hr tickers from Binance');
+
+      const response = await axios.get(`${this.baseURL}/ticker/24hr`);
+
+      const tickers: BinanceTicker[] = response.data
+        .filter((ticker: any) =>
+          ticker.symbol.endsWith('USDT') &&
+          !ticker.symbol.includes('UP') &&
+          !ticker.symbol.includes('DOWN') &&
+          !ticker.symbol.includes('BULL') &&
+          !ticker.symbol.includes('BEAR')
+        )
+        .map((ticker: any) => ({
+          symbol: ticker.symbol,
+          price: ticker.lastPrice,
+          priceChangePercent: ticker.priceChangePercent,
+          volume: ticker.volume,
+          high: ticker.highPrice,
+          low: ticker.lowPrice
+        }))
+        .sort((a: BinanceTicker, b: BinanceTicker) =>
+          parseFloat(b.volume) - parseFloat(a.volume)
+        );
+
+      // Update cache for all tickers
+      tickers.forEach(ticker => {
+        this.priceCache.set(ticker.symbol, ticker);
+      });
+
+      logInfo(`Fetched ${tickers.length} 24hr tickers from Binance`);
+      return tickers;
+    } catch (error) {
+      logError('Error fetching all 24hr tickers', error as Error);
       throw error;
     }
   }
@@ -180,11 +220,11 @@ export class BinanceService {
   // Convert timeframe to Binance interval
   private convertTimeframeToInterval(timeframe: string): string {
     const mapping: { [key: string]: string } = {
-      '1m': '1m',
+      '5m': '5m',
       '15m': '15m',
       '30m': '30m',
-      '4h': '4h',
       '1h': '1h',
+      '4h': '4h',
       '1d': '1d'
     };
     return mapping[timeframe] || '1h';

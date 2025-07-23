@@ -1,5 +1,5 @@
 import { RSI, MACD, BollingerBands, EMA, Stochastic } from 'technicalindicators';
-import { getOHLCVFromExchange } from './ccxtService';
+import { BinanceService } from './binanceService';
 import { logDebug, logError } from '../utils/logger';
 
 export interface TechnicalIndicatorResults {
@@ -49,8 +49,13 @@ export interface TradingSignal {
 }
 
 export class AdvancedTechnicalAnalysis {
-  
-  // Calculate top 5 technical indicators
+  private binanceService: BinanceService;
+
+  constructor() {
+    this.binanceService = new BinanceService();
+  }
+
+  // Calculate top 5 technical indicators using Binance API directly
   async calculateIndicators(
     exchange: string,
     symbol: string,
@@ -58,13 +63,19 @@ export class AdvancedTechnicalAnalysis {
     periods: number = 100
   ): Promise<TechnicalIndicatorResults> {
     try {
-      logDebug(`Calculating indicators for ${symbol} on ${timeframe}`);
-      
-      const ohlcv = await getOHLCVFromExchange(exchange, symbol, timeframe, periods);
-      
+      logDebug(`Calculating indicators for ${symbol} on ${timeframe} using Binance API`);
+
+      // Use Binance API directly instead of CCXT
+      const ohlcv = await this.binanceService.getOHLCV(symbol, timeframe, periods);
+
+      // Require 50 data points for accurate technical analysis
       if (ohlcv.length < 50) {
+        logDebug(`Only ${ohlcv.length} data points available for ${symbol} ${timeframe}, minimum 50 required`);
         throw new Error('Insufficient data for technical analysis');
       }
+
+      // Log data availability for debugging
+      logDebug(`${symbol} ${timeframe}: ${ohlcv.length} data points available`);
 
       const closes = ohlcv.map(candle => candle[4]);
       const highs = ohlcv.map(candle => candle[2]);

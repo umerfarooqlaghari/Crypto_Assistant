@@ -5,6 +5,8 @@ export const API_CONFIG = {
     SYMBOLS: '/api/enhanced-signals/symbols',
     ADVANCED_SIGNALS: '/api/enhanced-signals/advanced',
     MARKET_OVERVIEW: '/api/enhanced-signals/market-overview',
+    COIN_LIST: '/api/coin-list',
+    COIN_LIST_STATS: '/api/coin-list/stats',
   }
 };
 
