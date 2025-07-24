@@ -358,6 +358,17 @@ export class RealTimeDataService {
     });
   }
 
+  // Broadcast individual coin confidence updates from smart queue
+  broadcastCoinConfidenceUpdate(coinData: any) {
+    this.io.emit('coinConfidenceUpdate', {
+      symbol: coinData.symbol,
+      confidence: coinData.confidence,
+      lastUpdated: coinData.lastUpdated,
+      timestamp: Date.now()
+    });
+    logDebug(`Broadcasted confidence update for ${coinData.symbol} to ${this.io.sockets.sockets.size} clients`);
+  }
+
   // Public methods for external access
   async getSymbolData(symbol: string): Promise<RealTimeData | null> {
     const cached = this.dataCache.get(symbol.toUpperCase());

@@ -1,0 +1,159 @@
+CRYPTO ASSISTANT - CONFIDENCE & STRENGTH SIGNAL CALCULATION SYSTEM
+===============================================================================
+
+OVERVIEW
+--------
+The system uses a comprehensive scoring algorithm that combines 5 core technical 
+indicators, chart patterns, and candlestick patterns to generate confidence and 
+strength signals for trading decisions.
+
+CORE TECHNICAL INDICATORS (5 INDICATORS)
+===============================================================================
+
+1. RSI (RELATIVE STRENGTH INDEX)
+   - Period: 14 candles
+   - Range: 0-100
+   - Calculation: Standard RSI formula using average gains/losses
+   - Scoring:
+     * RSI < 30 (Oversold): +25 BULLISH points
+     * RSI > 70 (Overbought): +25 BEARISH points
+     * RSI 30-70: No points (neutral)
+
+2. MACD (MOVING AVERAGE CONVERGENCE DIVERGENCE)
+   - Fast EMA: 12 periods
+   - Slow EMA: 26 periods  
+   - Signal Line: 9-period EMA of MACD line
+   - Histogram: MACD - Signal Line
+   - Scoring:
+     * MACD > Signal AND Histogram > 0: +20 BULLISH points
+     * MACD < Signal AND Histogram < 0: +20 BEARISH points
+
+3. BOLLINGER BANDS
+   - Period: 20 candles
+   - Standard Deviation: 2
+   - Components: Upper Band, Middle (SMA20), Lower Band
+   - Scoring:
+     * Price > Upper Band: +25 BEARISH points (overbought)
+     * Price < Lower Band: +25 BULLISH points (oversold)
+   - Also used for breakout pattern detection
+
+4. EMA (EXPONENTIAL MOVING AVERAGES)
+   - EMA20: 20-period exponential moving average
+   - EMA50: 50-period exponential moving average
+   - Scoring:
+     * EMA20 > EMA50: +15 BULLISH points (uptrend)
+     * EMA20 < EMA50: +15 BEARISH points (downtrend)
+
+5. STOCHASTIC OSCILLATOR
+   - %K Period: 14 candles
+   - %D Period: 3 candles (smoothed %K)
+   - Range: 0-100
+   - Scoring:
+     * %K < 20 AND %D < 20: +15 BULLISH points (oversold)
+     * %K > 80 AND %D > 80: +15 BEARISH points (overbought)
+
+CHART PATTERNS (ADVANCED DETECTION)
+===============================================================================
+
+DETECTED PATTERNS:
+1. Head and Shoulders (Bearish) - Confidence: 75%
+2. Double Top (Bearish) - Confidence: 70%
+3. Double Bottom (Bullish) - Confidence: 70%
+4. Ascending Triangle (Bullish) - Confidence: 65%
+5. Descending Triangle (Bearish) - Confidence: 65%
+6. Bollinger Band Breakout (Bullish) - Confidence: 60%
+7. Bollinger Band Breakdown (Bearish) - Confidence: 60%
+
+SCORING FORMULA:
+- Bullish Chart Pattern: +(Pattern Confidence × 0.3) points
+- Bearish Chart Pattern: +(Pattern Confidence × 0.3) points
+
+Example: Head and Shoulders (75% confidence) = +22.5 bearish points
+
+CANDLESTICK PATTERNS (REVERSAL & CONTINUATION)
+===============================================================================
+
+DETECTED PATTERNS:
+1. Morning Star (Bullish) - Confidence: 85%
+2. Evening Star (Bearish) - Confidence: 85%
+3. Bullish Engulfing (Bullish) - Confidence: 80%
+4. Bearish Engulfing (Bearish) - Confidence: 80%
+5. Hammer (Bullish) - Confidence: 75%
+6. Hanging Man (Bearish) - Confidence: 75%
+7. Doji (Neutral) - Confidence: 70%
+
+SCORING FORMULA:
+- Bullish Candlestick: +(Pattern Confidence × 0.2) points
+- Bearish Candlestick: +(Pattern Confidence × 0.2) points
+
+Example: Bullish Engulfing (80% confidence) = +16 bullish points
+
+FINAL CALCULATION ALGORITHM
+===============================================================================
+
+STEP 1: ACCUMULATE POINTS
+- Start with 0 bullish points and 0 bearish points
+- Add points from each indicator based on conditions above
+- Add points from detected chart patterns
+- Add points from detected candlestick patterns
+
+STEP 2: CALCULATE NET SCORE
+Net Score = Total Bullish Points - Total Bearish Points
+
+STEP 3: DETERMINE ACTION
+- Net Score > +20: BUY signal
+- Net Score < -20: SELL signal  
+- Net Score between -20 and +20: HOLD signal
+
+STEP 4: CALCULATE CONFIDENCE
+- BUY/SELL: confidence = min(max((|Net Score| / 50) × 100, 60), 100)
+- HOLD: confidence = min(max(30, 70 - |Net Score| × 2), 65)
+
+STEP 5: CALCULATE STRENGTH
+Signal Strength = |Net Score| (absolute value of net score)
+
+EXAMPLE CALCULATION
+===============================================================================
+
+Sample Analysis for BTCUSDT:
+- RSI: 25 (oversold) → +25 bullish points
+- MACD: Bullish crossover → +20 bullish points  
+- EMA: EMA20 > EMA50 → +15 bullish points
+- Stochastic: 15/18 (oversold) → +15 bullish points
+- Chart Pattern: Double Bottom (70%) → +21 bullish points
+- Candlestick: Hammer (75%) → +15 bullish points
+
+Total: 111 bullish points, 0 bearish points
+Net Score: +111
+Action: BUY (score > 20)
+Confidence: min(max((111/50) × 100, 60), 100) = 100%
+Strength: 111
+
+CONFIDENCE RANGES
+===============================================================================
+- 90-100%: Very High Confidence (strong signals across multiple indicators)
+- 70-89%: High Confidence (most indicators agree)
+- 50-69%: Medium Confidence (mixed signals, some agreement)
+- 30-49%: Low Confidence (conflicting signals)
+
+STRENGTH RANGES  
+===============================================================================
+- 80-100: Very Strong Signal
+- 60-79: Strong Signal
+- 40-59: Moderate Signal
+- 20-39: Weak Signal
+- 0-19: Very Weak Signal
+
+DATA REQUIREMENTS
+===============================================================================
+- Minimum: 50 candles for accurate analysis
+- Optimal: 100 candles for full pattern recognition
+- Real-time updates via WebSocket for price changes
+- 5-minute cache for OHLCV data to reduce API calls
+
+TIMEFRAME SUPPORT
+===============================================================================
+- 1m, 5m, 15m, 30m, 1h, 4h, 1d
+- Each timeframe analyzed independently
+- Same algorithm applied across all timeframes
+- Results may vary significantly between timeframes

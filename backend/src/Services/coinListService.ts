@@ -45,7 +45,18 @@ export class CoinListService {
   private confidenceUpdateInterval: NodeJS.Timeout | null = null;
   private isUpdatingPrices = false;
   private isUpdatingConfidence = false;
-  
+
+  // Smart queue for staggered API calls
+  private smartQueueInterval: NodeJS.Timeout | null = null;
+  private currentCoinIndex = 0;
+  private isSmartQueueRunning = false;
+
+  // Rate limiting and caching
+  private lastApiCall = 0;
+  private readonly MIN_API_DELAY = 1000; // 1 second between API calls
+  private ohlcvCache: Map<string, { data: number[][], timestamp: number }> = new Map();
+  private readonly OHLCV_CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache
+
   // Top coins to analyze (limit to reduce API calls)
   private readonly TOP_COINS_LIMIT = 50;
   private readonly TIMEFRAMES = ['5m', '15m', '30m', '1h', '4h', '1d'];
@@ -193,6 +204,9 @@ export class CoinListService {
       // Subscribe to real-time updates for newly added coins
       this.subscribeToRealTimePrices();
 
+      // Notify smart queue that new coins are available
+      this.notifySmartQueueOfNewCoins();
+
       // Sort coins by volume
       const sortedCoins = coinListItems.sort((a, b) => b.volume - a.volume);
 
@@ -280,7 +294,7 @@ export class CoinListService {
     try {
       const symbol = ticker.symbol;
 
-      // Generate confidence signals for all timeframes
+      // Generate REAL confidence signals for initial load (full analysis)
       const confidence = await this.generateConfidenceSignals(symbol);
 
       const coinItem: CoinListItem = {
@@ -297,7 +311,27 @@ export class CoinListService {
       return coinItem;
     } catch (error) {
       logError(`Error processing coin item ${ticker.symbol}`, error as Error);
-      return null;
+
+      // Return coin with default confidence if error occurs
+      const coinItem: CoinListItem = {
+        symbol: ticker.symbol,
+        name: this.getCoinNameFromSymbol(ticker.symbol),
+        price: parseFloat(ticker.price),
+        priceChange24h: parseFloat(ticker.priceChangePercent),
+        volume: parseFloat(ticker.volume),
+        marketCap: undefined,
+        confidence: {
+          '5m': { action: 'HOLD' as const, confidence: 50, strength: 25, color: 'yellow' as const },
+          '15m': { action: 'HOLD' as const, confidence: 50, strength: 25, color: 'yellow' as const },
+          '30m': { action: 'HOLD' as const, confidence: 50, strength: 25, color: 'yellow' as const },
+          '1h': { action: 'HOLD' as const, confidence: 50, strength: 25, color: 'yellow' as const },
+          '4h': { action: 'HOLD' as const, confidence: 50, strength: 25, color: 'yellow' as const },
+          '1d': { action: 'HOLD' as const, confidence: 50, strength: 25, color: 'yellow' as const }
+        },
+        lastUpdated: Date.now()
+      };
+
+      return coinItem;
     }
   }
 
@@ -422,20 +456,243 @@ export class CoinListService {
     // The all-market tickers WebSocket stream provides real-time updates for ALL symbols
     // This eliminates the need for periodic REST API calls entirely
 
-    // Update confidence levels every minute (full recalculation like refresh)
-    this.confidenceUpdateInterval = setInterval(async () => {
-      if (!this.isUpdatingConfidence && this.coinListCache.size > 0) {
-        logInfo(`⏰ Confidence refresh interval triggered (cache size: ${this.coinListCache.size})`);
-        await this.fullConfidenceRefresh();
-      } else if (this.coinListCache.size === 0) {
-        logDebug('⏸️ Skipping confidence refresh - no coins in cache yet');
-      }
-    }, 60000); // 60 seconds = 1 minute
+    // REPLACED: Old burst confidence updates with smart queue system
+    // Start smart queue for staggered confidence updates (5 seconds between coins)
+    this.startSmartQueue();
 
     // Subscribe to real-time price updates for all cached coins
     this.subscribeToRealTimePrices();
 
-    logInfo('Started coin list background updates (confidence: 1min full refresh, real-time WebSocket for all prices)');
+    logInfo('Started coin list background updates (smart queue: 15s intervals, real-time WebSocket for all prices)');
+  }
+
+  // Smart queue system for staggered confidence updates
+  private startSmartQueue() {
+    // Smart queue will be started when coin list API is called
+    // No need to start immediately on service startup
+    logInfo('Smart queue initialized - will start when coin list API is called (15s intervals with rate limiting)');
+  }
+
+  // Restart smart queue when coin list API is called
+  private notifySmartQueueOfNewCoins() {
+    if (this.coinListCache.size > 0) {
+      // Stop existing queue if running
+      if (this.isSmartQueueRunning) {
+        logInfo(`Restarting smart queue with ${this.coinListCache.size} coins (API call triggered)`);
+        this.stopSmartQueue();
+      } else {
+        logInfo(`Starting smart queue with ${this.coinListCache.size} coins (API call triggered)`);
+      }
+
+      // Start fresh queue with current coins
+      this.startFreshSmartQueue();
+    }
+  }
+
+  // Stop the smart queue
+  private stopSmartQueue() {
+    if (this.smartQueueInterval) {
+      clearInterval(this.smartQueueInterval);
+      this.smartQueueInterval = null;
+    }
+    this.isSmartQueueRunning = false;
+    this.currentCoinIndex = 0;
+  }
+
+  // Start a fresh smart queue immediately (no waiting)
+  private startFreshSmartQueue() {
+    this.isSmartQueueRunning = true;
+    this.currentCoinIndex = 0;
+
+    // Process one coin every 15 seconds (reduced frequency to avoid rate limits)
+    this.smartQueueInterval = setInterval(async () => {
+      await this.processNextCoinInQueue();
+    }, 15000); // 15 seconds between each coin
+
+    const coinCount = this.coinListCache.size;
+    logInfo(`Smart queue started - processing ${coinCount} coins, one every 15 seconds`);
+  }
+
+  // Process the next coin in the queue
+  private async processNextCoinInQueue() {
+    try {
+      // Get list of cached coins
+      const coinSymbols = Array.from(this.coinListCache.keys());
+
+      if (coinSymbols.length === 0) {
+        logDebug('No coins in cache for smart queue processing');
+        return;
+      }
+
+      // Get current coin to process
+      const symbol = coinSymbols[this.currentCoinIndex];
+
+      if (!symbol) {
+        // Reset to beginning if we've gone past the end
+        this.currentCoinIndex = 0;
+        return;
+      }
+
+      logInfo(`Smart queue processing coin ${this.currentCoinIndex + 1}/${coinSymbols.length}: ${symbol}`);
+
+      // Update confidence for this specific coin
+      await this.updateSingleCoinConfidence(symbol);
+
+      // Move to next coin
+      this.currentCoinIndex++;
+
+      // Reset to beginning when we've processed all coins
+      if (this.currentCoinIndex >= coinSymbols.length) {
+        this.currentCoinIndex = 0;
+        logInfo(`Smart queue completed full cycle of ${coinSymbols.length} coins, restarting cycle`);
+      }
+
+    } catch (error) {
+      logError('Error in smart queue processing', error as Error);
+      // Continue with next coin even if current one fails
+      this.currentCoinIndex++;
+    }
+  }
+
+  // Update confidence for a single coin (used by smart queue)
+  private async updateSingleCoinConfidence(symbol: string) {
+    try {
+      const coinItem = this.coinListCache.get(symbol);
+      if (!coinItem) {
+        logDebug(`Coin ${symbol} not found in cache, skipping confidence update`);
+        return;
+      }
+
+      // Generate new confidence signals for this coin with rate limiting
+      const newConfidence = await this.generateConfidenceSignalsWithRateLimit(symbol);
+
+      // Update the coin item
+      coinItem.confidence = newConfidence;
+      coinItem.lastUpdated = Date.now();
+
+      // Update cache
+      this.coinListCache.set(symbol, coinItem);
+
+      // Broadcast real-time update to frontend
+      if (this.realTimeService) {
+        this.realTimeService.broadcastCoinConfidenceUpdate(coinItem);
+      }
+
+      logInfo(`Updated confidence for ${symbol} via smart queue`);
+
+    } catch (error) {
+      logError(`Error updating confidence for ${symbol}`, error as Error);
+    }
+  }
+
+  // Rate-limited version of generateConfidenceSignals
+  private async generateConfidenceSignalsWithRateLimit(symbol: string): Promise<CoinListItem['confidence']> {
+    const confidence: CoinListItem['confidence'] = {
+      '5m': { action: 'HOLD', confidence: 50, strength: 25, color: 'yellow' },
+      '15m': { action: 'HOLD', confidence: 50, strength: 25, color: 'yellow' },
+      '30m': { action: 'HOLD', confidence: 50, strength: 25, color: 'yellow' },
+      '1h': { action: 'HOLD', confidence: 50, strength: 25, color: 'yellow' },
+      '4h': { action: 'HOLD', confidence: 50, strength: 25, color: 'yellow' },
+      '1d': { action: 'HOLD', confidence: 50, strength: 25, color: 'yellow' }
+    };
+
+    // Process only 2 timeframes per queue cycle to reduce API calls
+    const timeframesToProcess = this.getTimeframesToProcess();
+
+    for (const timeframe of timeframesToProcess) {
+      try {
+        // Add delay between API calls
+        await this.enforceRateLimit();
+
+        // Get cached OHLCV data or fetch new
+        const ohlcv = await this.getCachedOHLCV(symbol, timeframe);
+
+        if (ohlcv.length < 50) {
+          logDebug(`Insufficient data for ${symbol} ${timeframe}, skipping`);
+          continue;
+        }
+
+        // Add delay before next API call
+        await this.enforceRateLimit();
+
+        // Get technical indicators
+        const indicators = await this.technicalAnalysisService.calculateIndicators(
+          'binance', symbol, timeframe, 100
+        );
+
+        // Detect patterns
+        const chartPatterns = this.technicalAnalysisService.detectChartPatterns(ohlcv, indicators);
+        const candlestickPatterns = this.technicalAnalysisService.detectCandlestickPatterns(ohlcv);
+
+        // Get current price from cache (no API call)
+        const currentPrice = await this.binanceService.getCurrentPrice(symbol);
+
+        // Generate trading signal
+        const signal = this.technicalAnalysisService.generateTradingSignal(
+          currentPrice, indicators, chartPatterns, candlestickPatterns
+        );
+
+        if (signal) {
+          const confidencePercentage = signal.confidence > 1 ? signal.confidence : signal.confidence * 100;
+          const strengthPercentage = signal.strength > 1 ? signal.strength : signal.strength * 100;
+
+          confidence[timeframe as keyof typeof confidence] = {
+            action: signal.action,
+            confidence: Math.round(confidencePercentage),
+            strength: Math.round(strengthPercentage),
+            color: this.getSignalColor(signal.action, signal.confidence)
+          };
+        }
+      } catch (error) {
+        logDebug(`Skipping ${symbol} ${timeframe} - error in analysis: ${error}`);
+      }
+    }
+
+    return confidence;
+  }
+
+  // Get 2 timeframes to process in rotation
+  private getTimeframesToProcess(): string[] {
+    const allTimeframes = this.TIMEFRAMES;
+    const startIndex = (this.currentCoinIndex * 2) % allTimeframes.length;
+    return [
+      allTimeframes[startIndex],
+      allTimeframes[(startIndex + 1) % allTimeframes.length]
+    ];
+  }
+
+  // Enforce rate limiting between API calls
+  private async enforceRateLimit() {
+    const now = Date.now();
+    const timeSinceLastCall = now - this.lastApiCall;
+
+    if (timeSinceLastCall < this.MIN_API_DELAY) {
+      const delay = this.MIN_API_DELAY - timeSinceLastCall;
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+
+    this.lastApiCall = Date.now();
+  }
+
+  // Get cached OHLCV data or fetch new with caching
+  private async getCachedOHLCV(symbol: string, timeframe: string): Promise<number[][]> {
+    const cacheKey = `${symbol}_${timeframe}`;
+    const cached = this.ohlcvCache.get(cacheKey);
+
+    if (cached && (Date.now() - cached.timestamp) < this.OHLCV_CACHE_TTL) {
+      return cached.data;
+    }
+
+    // Fetch new data
+    const ohlcv = await this.binanceService.getOHLCV(symbol, timeframe, 100);
+
+    // Cache the data
+    this.ohlcvCache.set(cacheKey, {
+      data: ohlcv,
+      timestamp: Date.now()
+    });
+
+    return ohlcv;
   }
 
   // Subscribe to real-time price updates for all coins in cache
@@ -649,7 +906,11 @@ export class CoinListService {
       clearInterval(this.confidenceUpdateInterval);
       this.confidenceUpdateInterval = null;
     }
-    logInfo('Stopped coin list background updates');
+
+    // Stop smart queue
+    this.stopSmartQueue();
+
+    logInfo('Stopped coin list background updates and smart queue');
   }
 
   // Get cached coin data

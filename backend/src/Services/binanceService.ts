@@ -175,17 +175,18 @@ export class BinanceService {
     }
   }
 
-  // Get historical klines/candlestick data
+  // Get historical klines/candlestick data with retry logic
   async getKlines(
     symbol: string,
     interval: string,
     limit: number = 100,
     startTime?: number,
-    endTime?: number
+    endTime?: number,
+    retryCount: number = 0
   ): Promise<BinanceKline[]> {
     try {
       logDebug(`Fetching klines for ${symbol} ${interval}`);
-      
+
       const params: any = {
         symbol,
         interval,
@@ -210,7 +211,15 @@ export class BinanceService {
         takerBuyBaseAssetVolume: kline[9],
         takerBuyQuoteAssetVolume: kline[10]
       }));
-    } catch (error) {
+    } catch (error: any) {
+      // Handle rate limiting with exponential backoff
+      if (error.response?.status === 429 && retryCount < 3) {
+        const delay = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
+        logDebug(`Rate limited for ${symbol}, retrying in ${delay}ms (attempt ${retryCount + 1})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return this.getKlines(symbol, interval, limit, startTime, endTime, retryCount + 1);
+      }
+
       logError(`Error fetching klines for ${symbol}`, error as Error);
       throw error;
     }

@@ -166,6 +166,20 @@ export default function CoinList() {
       setLastUpdate(new Date(data.timestamp));
     });
 
+    // Listen for individual coin confidence updates from smart queue
+    newSocket.on('coinConfidenceUpdate', (data: { symbol: string, confidence: any, lastUpdated: number, timestamp: number }) => {
+      console.log('🎯 Smart queue confidence update:', data.symbol, 'confidence updated');
+
+      setCoins(prevCoins =>
+        prevCoins.map(coin =>
+          coin.symbol === data.symbol
+            ? { ...coin, confidence: data.confidence, lastUpdated: data.lastUpdated }
+            : coin
+        )
+      );
+      setLastUpdate(new Date(data.timestamp));
+    });
+
     setSocket(newSocket);
 
     return () => {
