@@ -26,6 +26,37 @@ router.get('/', getCoinList);
 router.get('/stats', getCoinListStats);
 
 /**
+ * @route GET /api/coin-list/status
+ * @description Get coin list service status and last update time
+ * @returns Service status information
+ */
+router.get('/status', async (_req, res) => {
+  try {
+    const { getCoinListService } = await import('../controllers/coinListController');
+    const service = getCoinListService();
+    const stats = service.getPerformanceStats();
+
+    res.status(200).json({
+      success: true,
+      data: {
+        isActive: true,
+        lastUpdate: stats.lastUpdate,
+        totalCoins: stats.apiCalls > 0 ? 50 : 0, // Estimate based on activity
+        backgroundUpdatesActive: true,
+        cacheSize: stats.cacheSize,
+        uptime: stats.uptime,
+        timestamp: Date.now()
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get service status'
+    });
+  }
+});
+
+/**
  * @route GET /api/coin-list/:symbol
  * @description Get specific coin data with confidence indicators
  * @param symbol - Trading symbol (e.g., BTCUSDT)
@@ -54,36 +85,5 @@ router.get('/performance', getCoinListPerformance);
  * @returns Success confirmation
  */
 router.post('/performance/reset', resetCoinListPerformance);
-
-/**
- * @route GET /api/coin-list/status
- * @description Get coin list service status and last update time
- * @returns Service status information
- */
-router.get('/status', async (req, res) => {
-  try {
-    const { getCoinListService } = await import('../controllers/coinListController');
-    const service = getCoinListService();
-    const stats = service.getPerformanceStats();
-
-    res.status(200).json({
-      success: true,
-      data: {
-        isActive: true,
-        lastUpdate: stats.lastUpdate,
-        totalCoins: stats.apiCalls > 0 ? 50 : 0, // Estimate based on activity
-        backgroundUpdatesActive: true,
-        cacheSize: stats.cacheSize,
-        uptime: stats.uptime,
-        timestamp: Date.now()
-      }
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get service status'
-    });
-  }
-});
 
 export default router;
