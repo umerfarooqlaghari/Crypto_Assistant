@@ -202,17 +202,16 @@ export class RealTimeDataService {
   }
 
   private startDataUpdates() {
-    // Update data every 10 seconds
-    this.updateInterval = setInterval(async () => {
-      await this.updateAllActiveSymbols();
-    }, 10000);
+    // REMOVED: Periodic REST API updates - now using real-time WebSocket data
+    // Price data is updated in real-time via WebSocket all-market tickers stream
+    // Technical analysis is triggered by WebSocket price changes (see subscribeToNewSymbols)
 
-    // Also schedule technical analysis updates every minute
-    cron.schedule('*/1 * * * *', async () => {
+    // Optional: Keep a backup technical analysis update every 5 minutes for reliability
+    cron.schedule('*/5 * * * *', async () => {
       await this.updateTechnicalAnalysis();
     });
 
-    logInfo('Started real-time data updates (10-second intervals)');
+    logInfo('Started real-time data updates (WebSocket-based, technical analysis: real-time + 5min backup)');
   }
 
   private async updateAllActiveSymbols() {
@@ -229,14 +228,19 @@ export class RealTimeDataService {
 
   private async updateSymbolData(symbol: string) {
     try {
-      // Get latest price data from Binance
-      const ticker = await this.binanceService.getTicker24hr(symbol);
-      
+      // Get latest price data from WebSocket cache (no REST API calls)
+      const cachedTicker = this.binanceService.getCachedPrice(symbol);
+
+      if (!cachedTicker) {
+        logDebug(`No cached data available for ${symbol} - WebSocket may not have received data yet`);
+        return;
+      }
+
       const realTimeData: RealTimeData = {
-        symbol: ticker.symbol,
-        price: parseFloat(ticker.price),
-        priceChange24h: parseFloat(ticker.priceChangePercent),
-        volume: parseFloat(ticker.volume),
+        symbol: cachedTicker.symbol,
+        price: parseFloat(cachedTicker.price),
+        priceChange24h: parseFloat(cachedTicker.priceChangePercent),
+        volume: parseFloat(cachedTicker.volume),
         timestamp: Date.now()
       };
 
@@ -252,6 +256,7 @@ export class RealTimeDataService {
       // Broadcast to subscribed clients
       this.broadcastToSubscribers(symbol, realTimeData);
 
+      logDebug(`Updated symbol data for ${symbol}: $${realTimeData.price} (from WebSocket cache)`);
     } catch (error) {
       logError(`Error updating data for ${symbol}`, error as Error);
     }
@@ -275,7 +280,9 @@ export class RealTimeDataService {
             const chartPatterns = this.technicalAnalysis.detectChartPatterns(ohlcv, indicators);
             const candlestickPatterns = this.technicalAnalysis.detectCandlestickPatterns(ohlcv);
             
-            const currentPrice = parseFloat((await this.binanceService.getCurrentPrice(symbol)).toString());
+            // Get current price from WebSocket cache instead of REST API
+            const cachedTicker = this.binanceService.getCachedPrice(symbol);
+            const currentPrice = cachedTicker ? parseFloat(cachedTicker.price) : 0;
             const signal = this.technicalAnalysis.generateTradingSignal(
               currentPrice, indicators, chartPatterns, candlestickPatterns
             );
@@ -381,7 +388,7 @@ export class RealTimeDataService {
   private subscribeToNewSymbols(symbols: string[]) {
     symbols.forEach(symbol => {
       // Subscribe to individual ticker updates for the new symbol
-      this.binanceService.subscribeToPrice(symbol, (data) => {
+      this.binanceService.subscribeToPrice(symbol, async (data) => {
         logDebug(`Received price update for ${symbol}: ${data.price}`);
 
         const realTimeData: RealTimeData = {
@@ -395,6 +402,9 @@ export class RealTimeDataService {
         // Update cache
         this.dataCache.set(symbol, realTimeData);
 
+        // Trigger real-time technical analysis update for this symbol
+        await this.updateTechnicalAnalysisForSymbol(symbol);
+
         // Broadcast to subscribed clients
         this.broadcastToSubscribers(symbol, realTimeData);
         logDebug(`Broadcasted price update for ${symbol} to clients`);
@@ -402,6 +412,68 @@ export class RealTimeDataService {
     });
 
     logInfo(`Subscribed to real-time data for new symbols: ${symbols.join(', ')}`);
+  }
+
+  // Update technical analysis for a specific symbol (real-time)
+  private async updateTechnicalAnalysisForSymbol(symbol: string) {
+    try {
+      // Get timeframes for this symbol from subscriptions
+      const timeframes = this.getTimeframesForSymbol(symbol);
+
+      if (timeframes.length === 0) {
+        return; // No subscriptions for this symbol
+      }
+
+      for (const timeframe of timeframes) {
+        try {
+          const indicators = await this.technicalAnalysis.calculateIndicators(
+            'binance', symbol, timeframe
+          );
+
+          const ohlcv = await this.binanceService.getOHLCV(symbol, timeframe, 100);
+          const chartPatterns = this.technicalAnalysis.detectChartPatterns(ohlcv, indicators);
+          const candlestickPatterns = this.technicalAnalysis.detectCandlestickPatterns(ohlcv);
+
+          // Get current price from WebSocket cache
+          const cachedTicker = this.binanceService.getCachedPrice(symbol);
+          const currentPrice = cachedTicker ? parseFloat(cachedTicker.price) : 0;
+
+          if (currentPrice > 0) {
+            const signal = this.technicalAnalysis.generateTradingSignal(
+              currentPrice, indicators, chartPatterns, candlestickPatterns
+            );
+
+            const analysis = {
+              timeframe,
+              indicators,
+              chartPatterns,
+              candlestickPatterns,
+              signal,
+              timestamp: Date.now()
+            };
+
+            // Update analysis cache
+            this.analysisCache.set(`${symbol}_${timeframe}`, analysis);
+
+            // Update real-time data with fresh technical analysis
+            const realTimeData = this.dataCache.get(symbol);
+            if (realTimeData) {
+              realTimeData.technicalAnalysis = analysis;
+              this.dataCache.set(symbol, realTimeData);
+
+              // Broadcast updated data to clients
+              this.broadcastToSubscribers(symbol, realTimeData);
+            }
+
+            logDebug(`Updated technical analysis for ${symbol} ${timeframe} in real-time`);
+          }
+        } catch (error) {
+          logDebug(`Error updating technical analysis for ${symbol} ${timeframe}:`, error);
+        }
+      }
+    } catch (error) {
+      logError(`Error in real-time technical analysis update for ${symbol}`, error as Error);
+    }
   }
 
   // Get the Socket.IO instance for external use

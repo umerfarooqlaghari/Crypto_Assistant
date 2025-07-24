@@ -193,18 +193,40 @@ export class DefaultSettingsService {
         }
       }
 
-      // Initialize notification rules
-      const existingRules = await prismaService.getActiveNotificationRules();
-      if (existingRules.length === 0) {
-        for (const rule of this.defaultNotificationRules) {
-          await prismaService.createNotificationRule(rule);
-          logInfo(`Created default notification rule: ${rule.name}`);
-        }
-      }
+      // REMOVED: Default notification rules creation
+      // Users can create their own notification rules through the admin panel
+      // No default notification rules will be created automatically
+      logInfo('Skipping default notification rules creation - users can create custom rules');
 
       logInfo('Default settings initialization completed');
     } catch (error) {
       logError('Failed to initialize default settings', error as Error);
+      throw error;
+    }
+  }
+
+  public static async initializeAdminSettingsOnly(): Promise<void> {
+    try {
+      logInfo('Initializing admin settings only (no notification rules)...');
+
+      // Initialize admin settings only
+      for (const setting of this.defaultAdminSettings) {
+        const existing = await prismaService.getAdminSetting(setting.key);
+        if (!existing) {
+          await prismaService.setAdminSetting(
+            setting.key,
+            setting.value,
+            setting.type,
+            setting.description,
+            setting.category
+          );
+          logInfo(`Created default admin setting: ${setting.key}`);
+        }
+      }
+
+      logInfo('Admin settings initialization completed');
+    } catch (error) {
+      logError('Failed to initialize admin settings', error as Error);
       throw error;
     }
   }
@@ -218,7 +240,7 @@ export class DefaultSettingsService {
       await prisma.adminSettings.deleteMany({});
       await prisma.notificationRule.deleteMany({});
 
-      // Reinitialize defaults
+      // Reinitialize defaults (admin settings only, no notification rules)
       await this.initializeDefaultSettings();
 
       logInfo('Reset to default settings completed');

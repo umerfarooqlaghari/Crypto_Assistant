@@ -418,15 +418,9 @@ export class CoinListService {
 
   // Start background updates for price data and confidence levels
   private startBackgroundUpdates() {
-    // Update prices every 5 seconds for more real-time updates
-    this.priceUpdateInterval = setInterval(async () => {
-      if (!this.isUpdatingPrices && this.coinListCache.size > 0) {
-        logDebug(`⏰ Price update interval triggered (cache size: ${this.coinListCache.size})`);
-        await this.updatePricesOnly();
-      } else if (this.coinListCache.size === 0) {
-        logDebug('⏸️ Skipping price update - no coins in cache yet');
-      }
-    }, 5000); // 5 seconds for very frequent price updates
+    // REMOVED: REST API price updates - now using real-time WebSocket all-market tickers stream
+    // The all-market tickers WebSocket stream provides real-time updates for ALL symbols
+    // This eliminates the need for periodic REST API calls entirely
 
     // Update confidence levels every minute (full recalculation like refresh)
     this.confidenceUpdateInterval = setInterval(async () => {
@@ -441,7 +435,7 @@ export class CoinListService {
     // Subscribe to real-time price updates for all cached coins
     this.subscribeToRealTimePrices();
 
-    logInfo('Started coin list background updates (prices: 5s, confidence: 1min full refresh, real-time WebSocket)');
+    logInfo('Started coin list background updates (confidence: 1min full refresh, real-time WebSocket for all prices)');
   }
 
   // Subscribe to real-time price updates for all coins in cache

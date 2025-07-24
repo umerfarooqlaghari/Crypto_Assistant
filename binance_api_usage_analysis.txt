@@ -1,0 +1,62 @@
+BINANCE API USAGE ANALYSIS - RATE LIMITING BREAKDOWN
+=====================================================
+
+BINANCE API ENDPOINTS USAGE & WEIGHTS
+=====================================
+
++----------------------------------+--------+---------------------------+---------------+
+| Endpoint                         | Weight | Your Usage Frequency      | Calls/Minute  |
++----------------------------------+--------+---------------------------+---------------+
+| /api/v3/exchangeInfo             | 10     | Once during getAllSymbols()| ~0.2          |
+| /api/v3/ticker/24hr (all symbols)| 40     | Every 5 seconds (price)   | 12            |
+| /api/v3/ticker/24hr (single)     | 1      | Per coin confidence       | 50-100        |
+| /api/v3/ticker/price             | 1      | Fallback when cache miss  | 10-20         |
+| /api/v3/klines                   | 1      | Per timeframe per coin    | 300-600       |
++----------------------------------+--------+---------------------------+---------------+
+
+WEIGHT CALCULATION BREAKDOWN
+===========================
+
+Price Updates (Every 5 seconds):
+- getAllTickers24hr() → 40 weight × 12 times/minute = 480 weight/minute
+
+Confidence Updates (Every 60 seconds):
+- 50 coins × 6 timeframes = 300 getKlines() calls → 300 weight/minute
+- Individual ticker calls for confidence → 50 weight/minute
+
+On-demand Requests:
+- Technical analysis calls → 50-100 weight/minute
+
+TOTAL WEIGHT USAGE
+==================
+- Price updates:     480 weight/minute
+- Confidence updates: 350 weight/minute  
+- On-demand requests: 100 weight/minute
+- TOTAL:             ~930 weight/minute
+
+BINANCE RATE LIMITS
+==================
+- Spot API Limit:    1,200 weight per minute
+- Your Usage:        ~930 weight/minute
+- Utilization:       ~78% of limit
+
+RATE LIMITING CAUSES
+===================
+1. Burst Traffic: Multiple users accessing API simultaneously
+2. No Rate Limiting Logic: No throttling or queuing implemented
+3. Inefficient Patterns: 
+   - getAllTickers24hr() every 5 seconds (40 weight each)
+   - Multiple getKlines() calls without batching
+4. Cache Misses: Empty cache triggers many individual API calls
+
+RECOMMENDED SOLUTIONS
+====================
+1. Reduce getAllTickers24hr() frequency from 5s to 30s
+2. Implement request queuing with weight tracking
+3. Use WebSocket streams more (don't count toward REST limits)
+4. Batch technical analysis requests
+5. Add exponential backoff on rate limit errors
+
+MAIN CULPRIT
+============
+The getAllTickers24hr() calls consuming 480 weight/minute (40% of total usage)

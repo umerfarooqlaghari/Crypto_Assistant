@@ -90,22 +90,21 @@ export class BinanceService {
     }
   }
 
-  // Get current price for a symbol
+  // Get current price for a symbol (WebSocket cache only)
   async getCurrentPrice(symbol: string): Promise<number> {
     try {
-      // Check cache first
+      // Use WebSocket cache only - no REST API fallback
       const cached = this.priceCache.get(symbol);
       if (cached) {
         return parseFloat(cached.price);
       }
 
-      const response = await axios.get(`${this.baseURL}/ticker/price`, {
-        params: { symbol }
-      });
-
-      return parseFloat(response.data.price);
+      // If no cached data, return 0 or throw error
+      // The all-market tickers WebSocket should have data for all USDT pairs
+      logError(`No cached price data available for ${symbol} - WebSocket may not have received data yet`);
+      throw new Error(`No cached price data available for ${symbol}`);
     } catch (error) {
-      logError(`Error fetching price for ${symbol}`, error as Error);
+      logError(`Error getting cached price for ${symbol}`, error as Error);
       throw error;
     }
   }
@@ -257,7 +256,10 @@ export class BinanceService {
   // Initialize WebSocket connections for real-time price updates
   private initializePriceStreams() {
     logInfo('Initializing Binance WebSocket price streams');
-    
+
+    // Subscribe to ALL market tickers stream for comprehensive real-time data
+    this.subscribeToAllMarketTickers();
+
     // We'll start with major pairs and add more as needed
     const majorPairs = [
       'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'ADAUSDT', 'SOLUSDT',
@@ -314,6 +316,65 @@ export class BinanceService {
     });
 
     this.wsConnections.set('main', ws);
+  }
+
+  // Subscribe to ALL market tickers stream (replaces REST API calls)
+  private subscribeToAllMarketTickers() {
+    const wsUrl = `${this.wsBaseURL}/!ticker@arr`;
+    const ws = new WebSocket(wsUrl);
+
+    ws.on('open', () => {
+      logInfo('Connected to Binance ALL market tickers WebSocket stream');
+    });
+
+    ws.on('message', (data: WebSocket.Data) => {
+      try {
+        const tickers = JSON.parse(data.toString());
+
+        // Process each ticker in the array
+        if (Array.isArray(tickers)) {
+          tickers.forEach((ticker: any) => {
+            // Filter for USDT pairs and exclude leveraged tokens
+            if (ticker.s.endsWith('USDT') &&
+                !ticker.s.includes('UP') &&
+                !ticker.s.includes('DOWN') &&
+                !ticker.s.includes('BULL') &&
+                !ticker.s.includes('BEAR')) {
+
+              const tickerData: BinanceTicker = {
+                symbol: ticker.s,
+                price: ticker.c,
+                priceChangePercent: ticker.P,
+                volume: ticker.v,
+                high: ticker.h,
+                low: ticker.l
+              };
+
+              // Update cache
+              this.priceCache.set(ticker.s, tickerData);
+
+              // Notify subscribers
+              this.notifySubscribers(ticker.s, tickerData);
+            }
+          });
+
+          logDebug(`Processed ${tickers.length} ticker updates from all market stream`);
+        }
+      } catch (error) {
+        logError('Error parsing all market tickers WebSocket message', error as Error);
+      }
+    });
+
+    ws.on('error', (error) => {
+      logError('Binance all market tickers WebSocket error', error);
+    });
+
+    ws.on('close', () => {
+      logInfo('Binance all market tickers WebSocket connection closed, attempting to reconnect...');
+      setTimeout(() => this.subscribeToAllMarketTickers(), 5000);
+    });
+
+    this.wsConnections.set('allTickers', ws);
   }
 
   // Subscribe to individual symbol ticker
@@ -378,17 +439,14 @@ export class BinanceService {
     }
     this.subscribers.get(symbol)!.add(callback);
 
-    // Send current cached data if available
+    // Send current cached data if available (WebSocket cache-first approach)
     const cached = this.priceCache.get(symbol);
     if (cached) {
       callback(cached);
     } else {
-      // Fetch initial data if not cached
-      this.getTicker24hr(symbol).then(ticker => {
-        callback(ticker);
-      }).catch(error => {
-        logError(`Error fetching initial data for ${symbol}`, error);
-      });
+      // No REST API fallback - WebSocket will provide data when available
+      // The all-market tickers stream should have data for all USDT pairs
+      logDebug(`No cached data for ${symbol} yet - WebSocket will provide data when available`);
     }
   }
 
