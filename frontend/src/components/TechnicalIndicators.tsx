@@ -28,25 +28,304 @@ interface TechnicalIndicatorsProps {
     };
   };
   currentPrice?: number;
+  compact?: boolean;
 }
 
-export default function TechnicalIndicators({ indicators, currentPrice }: TechnicalIndicatorsProps) {
-  // Bollinger Bands status functions
-  const getBollingerStatus = (price: number, bands: { upper: number; middle: number; lower: number }) => {
-    if (price > bands.upper) return 'OVERBOUGHT';
-    if (price < bands.lower) return 'OVERSOLD';
-    if (price > bands.middle) return 'BULLISH';
-    if (price < bands.middle) return 'BEARISH';
-    return 'NEUTRAL';
+export default function TechnicalIndicators({ indicators, currentPrice, compact = false }: TechnicalIndicatorsProps) {
+  // Calculate points for each indicator based on the existing scoring system
+  const calculateIndicatorPoints = () => {
+    const indicatorScores = [];
+
+    // RSI analysis (25 points for extreme conditions, show current value for neutral)
+    let rsiPoints = 0;
+    let rsiStatus = '';
+    if (indicators.rsi < 30) {
+      rsiPoints = 25;
+      rsiStatus = 'BULLISH';
+    } else if (indicators.rsi > 70) {
+      rsiPoints = 25;
+      rsiStatus = 'BEARISH';
+    } else {
+      // For neutral RSI, show relative strength based on distance from 50
+      const distanceFrom50 = Math.abs(indicators.rsi - 50);
+      rsiPoints = Math.round(distanceFrom50 / 2); // 0-25 points based on how far from neutral
+      if (indicators.rsi > 50) {
+        rsiStatus = 'BULLISH';
+      } else {
+        rsiStatus = 'BEARISH';
+      }
+    }
+    indicatorScores.push({
+      name: 'RSI',
+      points: rsiPoints,
+      status: rsiStatus,
+      type: 'rsi'
+    });
+
+    // MACD analysis (20 points for clear signals, scaled for strength)
+    let macdPoints = 0;
+    let macdStatus = '';
+    const macdDiff = indicators.macd.MACD - indicators.macd.signal;
+    const histogramAbs = Math.abs(indicators.macd.histogram);
+
+    if (indicators.macd.MACD > indicators.macd.signal && indicators.macd.histogram > 0) {
+      // Strong bullish signal gets full 20 points
+      macdPoints = 20;
+      macdStatus = 'BULLISH';
+    } else if (indicators.macd.MACD < indicators.macd.signal && indicators.macd.histogram < 0) {
+      // Strong bearish signal gets full 20 points
+      macdPoints = 20;
+      macdStatus = 'BEARISH';
+    } else {
+      // Weak signals get scaled points based on histogram strength
+      macdPoints = Math.min(Math.round(histogramAbs * 10000), 15); // Scale histogram to 0-15 points
+      if (macdDiff > 0) {
+        macdStatus = 'BULLISH';
+      } else {
+        macdStatus = 'BEARISH';
+      }
+    }
+    indicatorScores.push({
+      name: 'MACD',
+      points: macdPoints,
+      status: macdStatus,
+      type: 'macd'
+    });
+
+    // OBV analysis (18 + 12 = up to 30 points)
+    let obvPoints = 0;
+    let obvStatus = '';
+    if (indicators.obv) {
+      if (indicators.obv.trend === 'BULLISH') {
+        obvPoints += 18;
+        obvStatus = 'BULLISH';
+      } else if (indicators.obv.trend === 'BEARISH') {
+        obvPoints += 18;
+        obvStatus = 'BEARISH';
+      }
+
+      // Additional points for divergence
+      if (indicators.obv.divergence === 'BULLISH') {
+        obvPoints += 12;
+        obvStatus = 'BULLISH';
+      } else if (indicators.obv.divergence === 'BEARISH') {
+        obvPoints += 12;
+        obvStatus = 'BEARISH';
+      }
+
+      if (obvPoints === 0) obvStatus = 'NEUTRAL';
+
+      indicatorScores.push({
+        name: 'OBV',
+        points: obvPoints,
+        status: obvStatus,
+        type: 'obv'
+      });
+    }
+
+    // EMA analysis (15 points)
+    let emaPoints = 0;
+    let emaStatus = '';
+    if (indicators.ema20 > indicators.ema50) {
+      emaPoints = 15;
+      emaStatus = 'BULLISH';
+    } else {
+      emaPoints = 15;
+      emaStatus = 'BEARISH';
+    }
+    indicatorScores.push({
+      name: 'EMA Trend',
+      points: emaPoints,
+      status: emaStatus,
+      type: 'ema'
+    });
+
+    // Stochastic analysis (15 points for extreme conditions, scaled for others)
+    let stochPoints = 0;
+    let stochStatus = '';
+    const avgStoch = (indicators.stochastic.k + indicators.stochastic.d) / 2;
+
+    if (indicators.stochastic.k < 20 && indicators.stochastic.d < 20) {
+      stochPoints = 15;
+      stochStatus = 'BULLISH';
+    } else if (indicators.stochastic.k > 80 && indicators.stochastic.d > 80) {
+      stochPoints = 15;
+      stochStatus = 'BEARISH';
+    } else {
+      // Scale points based on how close to extreme levels
+      if (avgStoch < 50) {
+        stochPoints = Math.round((50 - avgStoch) / 50 * 10); // 0-10 points for bearish tendency
+        stochStatus = 'BULLISH';
+      } else {
+        stochPoints = Math.round((avgStoch - 50) / 50 * 10); // 0-10 points for bullish tendency
+        stochStatus = 'BEARISH';
+      }
+    }
+    indicatorScores.push({
+      name: 'Stochastic',
+      points: stochPoints,
+      status: stochStatus,
+      type: 'stochastic'
+    });
+
+    // Bollinger Bands analysis (25 points for extreme, scaled for position within bands)
+    let bbPoints = 0;
+    let bbStatus = '';
+    if (currentPrice && indicators.bollingerBands) {
+      const { upper, middle, lower } = indicators.bollingerBands;
+
+      if (currentPrice > upper) {
+        bbPoints = 25;
+        bbStatus = 'BEARISH';
+      } else if (currentPrice < lower) {
+        bbPoints = 25;
+        bbStatus = 'BULLISH';
+      } else {
+        // Calculate position within bands and assign points accordingly
+        const bandWidth = upper - lower;
+        const pricePosition = (currentPrice - lower) / bandWidth; // 0 to 1
+
+        if (pricePosition > 0.5) {
+          // Above middle line - bearish tendency
+          bbPoints = Math.round((pricePosition - 0.5) * 2 * 20); // 0-20 points
+          bbStatus = 'BEARISH';
+        } else {
+          // Below middle line - bullish tendency
+          bbPoints = Math.round((0.5 - pricePosition) * 2 * 20); // 0-20 points
+          bbStatus = 'BULLISH';
+        }
+      }
+    }
+    indicatorScores.push({
+      name: 'Bollinger Bands',
+      points: bbPoints,
+      status: bbStatus,
+      type: 'bollinger'
+    });
+
+    // Sort by points (highest first), then by name for consistency
+    return indicatorScores.sort((a, b) => {
+      if (b.points !== a.points) {
+        return b.points - a.points;
+      }
+      return a.name.localeCompare(b.name);
+    });
   };
 
-  const getBollingerStatusColor = (status: string) => {
-    switch (status) {
-      case 'OVERBOUGHT': return 'text-red-400';
-      case 'OVERSOLD': return 'text-green-400';
-      case 'BULLISH': return 'text-green-300';
-      case 'BEARISH': return 'text-red-300';
-      default: return 'text-yellow-400';
+  const sortedIndicators = calculateIndicatorPoints();
+
+  // Render specific indicator details based on type
+  const renderIndicatorDetails = (type: string) => {
+    switch (type) {
+      case 'rsi':
+        return (
+          <div className="flex items-center justify-between">
+            <span className={`text-lg font-bold ${
+              indicators.rsi > 70 ? 'text-red-400' :
+              indicators.rsi < 30 ? 'text-green-400' : 'text-yellow-400'
+            }`}>
+              {formatIndicatorValue(safeNumber(indicators.rsi), 1)}
+            </span>
+            <div className="w-24 h-2 bg-gray-700 rounded-full overflow-hidden">
+              <div
+                className={`h-full transition-all duration-500 ${
+                  indicators.rsi > 70 ? 'bg-red-500' :
+                  indicators.rsi < 30 ? 'bg-green-500' : 'bg-yellow-500'
+                }`}
+                style={{ width: `${indicators.rsi}%` }}
+              />
+            </div>
+          </div>
+        );
+
+      case 'macd':
+        return (
+          <div className="space-y-1 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-400">MACD:</span>
+              <span className="text-gray-100">{formatIndicatorValue(safeNumber(indicators.macd.MACD), 6)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-400">Signal:</span>
+              <span className="text-gray-100">{formatIndicatorValue(safeNumber(indicators.macd.signal), 6)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-400">Histogram:</span>
+              <span className={`${indicators.macd.histogram >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {formatIndicatorValue(safeNumber(indicators.macd.histogram), 6)}
+              </span>
+            </div>
+          </div>
+        );
+
+      case 'bollinger':
+        return (
+          <div className="space-y-1 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-400">Upper:</span>
+              <span className="text-gray-100">{formatPrice(indicators.bollingerBands.upper)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-400">Middle:</span>
+              <span className="text-gray-100">{formatPrice(indicators.bollingerBands.middle)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-400">Lower:</span>
+              <span className="text-gray-100">{formatPrice(indicators.bollingerBands.lower)}</span>
+            </div>
+          </div>
+        );
+
+      case 'ema':
+        return (
+          <div className="space-y-1 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-400">EMA 20:</span>
+              <span className="text-gray-100">{formatPrice(indicators.ema20)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-400">EMA 50:</span>
+              <span className="text-gray-100">{formatPrice(indicators.ema50)}</span>
+            </div>
+          </div>
+        );
+
+      case 'stochastic':
+        return (
+          <div className="space-y-1 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-400">%K:</span>
+              <span className="text-gray-100">{formatIndicatorValue(safeNumber(indicators.stochastic.k), 1)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-400">%D:</span>
+              <span className="text-gray-100">{formatIndicatorValue(safeNumber(indicators.stochastic.d), 1)}</span>
+            </div>
+          </div>
+        );
+
+      case 'obv':
+        return indicators.obv ? (
+          <div className="space-y-1 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-400">Current:</span>
+              <span className="text-gray-100">{formatOBVValue(indicators.obv.current)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-400">Trend:</span>
+              <span className={getOBVTrendColor(indicators.obv.trend)}>{indicators.obv.trend}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-400">Divergence:</span>
+              <span className={getOBVDivergenceColor(indicators.obv.divergence)}>
+                {indicators.obv.divergence === 'NONE' ? 'None' : indicators.obv.divergence}
+              </span>
+            </div>
+          </div>
+        ) : null;
+
+      default:
+        return null;
     }
   };
 
@@ -64,44 +343,6 @@ export default function TechnicalIndicators({ indicators, currentPrice }: Techni
       </div>
     );
   }
-  const getRSIColor = (rsi: number) => {
-    if (rsi > 70) return 'text-red-400';
-    if (rsi < 30) return 'text-green-400';
-    return 'text-yellow-400';
-  };
-
-  const getRSIStatus = (rsi: number) => {
-    if (rsi > 70) return 'Overbought';
-    if (rsi < 30) return 'Oversold';
-    return 'Neutral';
-  };
-
-  const getMACDColor = (macd: number, signal: number) => {
-    if (macd > signal) return 'text-green-400';
-    return 'text-red-400';
-  };
-
-  const getMACDStatus = (macd: number, signal: number) => {
-    if (macd > signal) return 'Bullish';
-    return 'Bearish';
-  };
-
-  const getEMAStatus = (ema20: number, ema50: number) => {
-    if (ema20 > ema50) return { status: 'Bullish', color: 'text-green-400' };
-    return { status: 'Bearish', color: 'text-red-400' };
-  };
-
-  const getStochasticColor = (k: number, d: number) => {
-    if (k > 80 && d > 80) return 'text-red-400';
-    if (k < 20 && d < 20) return 'text-green-400';
-    return 'text-yellow-400';
-  };
-
-  const getStochasticStatus = (k: number, d: number) => {
-    if (k > 80 && d > 80) return 'Overbought';
-    if (k < 20 && d < 20) return 'Oversold';
-    return 'Neutral';
-  };
 
   // OBV helper functions
   const getOBVTrendColor = (trend: string) => {
@@ -182,159 +423,38 @@ export default function TechnicalIndicators({ indicators, currentPrice }: Techni
     return value.toFixed(decimals);
   };
 
-  const emaStatus = getEMAStatus(indicators.ema20, indicators.ema50);
-
   return (
-    <div className="bg-gradient-to-br from-gray-800/90 to-black/90 backdrop-blur-md rounded-xl p-6 border border-gray-600/30 shadow-xl">
-      <div className="flex items-center gap-2 mb-6">
-        <BarChart3 className="w-5 h-5 text-gray-400" />
-        <h3 className="text-xl font-semibold text-gray-100">Technical Indicators</h3>
-      </div>
+    <div className={compact ? "" : "bg-gradient-to-br from-gray-800/90 to-black/90 backdrop-blur-md rounded-xl p-6 border border-gray-600/30 shadow-xl"}>
+      {!compact && (
+        <div className="flex items-center gap-2 mb-6">
+          <BarChart3 className="w-5 h-5 text-gray-400" />
+          <h3 className="text-xl font-semibold text-gray-100">Technical Indicators</h3>
+        </div>
+      )}
 
       <div className="space-y-4">
-        {/* RSI */}
-        <div className="p-4 bg-gradient-to-r from-gray-700/20 to-gray-600/10 rounded-lg border border-gray-600/30">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-300">RSI (14)</span>
-            <span className={`text-sm font-semibold ${getRSIColor(indicators.rsi)}`}>
-              {getRSIStatus(indicators.rsi)}
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className={`text-lg font-bold ${getRSIColor(safeNumber(indicators.rsi))}`}>
-              {formatIndicatorValue(safeNumber(indicators.rsi), 1)}
-            </span>
-            <div className="w-24 h-2 bg-gray-700 rounded-full overflow-hidden">
-              <div 
-                className={`h-full transition-all duration-500 ${
-                  indicators.rsi > 70 ? 'bg-red-500' : 
-                  indicators.rsi < 30 ? 'bg-green-500' : 'bg-yellow-500'
-                }`}
-                style={{ width: `${indicators.rsi}%` }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* MACD */}
-        <div className="p-4 bg-gradient-to-r from-gray-700/20 to-gray-600/10 rounded-lg border border-gray-600/30">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-300">MACD</span>
-            <span className={`text-sm font-semibold ${getMACDColor(indicators.macd.MACD, indicators.macd.signal)}`}>
-              {getMACDStatus(indicators.macd.MACD, indicators.macd.signal)}
-            </span>
-          </div>
-          <div className="space-y-1 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-400">MACD:</span>
-              <span className="text-gray-100">{formatIndicatorValue(safeNumber(indicators.macd.MACD), 6)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">Signal:</span>
-              <span className="text-gray-100">{formatIndicatorValue(safeNumber(indicators.macd.signal), 6)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">Histogram:</span>
-              <span className={`${indicators.macd.histogram >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {formatIndicatorValue(safeNumber(indicators.macd.histogram), 6)}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Bollinger Bands */}
-        <div className="p-4 bg-gradient-to-r from-gray-700/20 to-gray-600/10 rounded-lg border border-gray-600/30">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-300">Bollinger Bands</span>
-            {currentPrice && (
-              <span className={`text-sm font-semibold ${getBollingerStatusColor(getBollingerStatus(currentPrice, indicators.bollingerBands))}`}>
-                {getBollingerStatus(currentPrice, indicators.bollingerBands)}
-              </span>
-            )}
-          </div>
-          <div className="space-y-1 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-400">Upper:</span>
-              <span className="text-gray-100">{formatPrice(indicators.bollingerBands.upper)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">Middle:</span>
-              <span className="text-gray-100">{formatPrice(indicators.bollingerBands.middle)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">Lower:</span>
-              <span className="text-gray-100">{formatPrice(indicators.bollingerBands.lower)}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* EMA */}
-        <div className="p-4 bg-gradient-to-r from-gray-700/20 to-gray-600/10 rounded-lg border border-gray-600/30">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-300">EMA Trend</span>
-            <span className={`text-sm font-semibold ${emaStatus.color}`}>
-              {emaStatus.status}
-            </span>
-          </div>
-          <div className="space-y-1 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-400">EMA 20:</span>
-              <span className="text-gray-100">{formatPrice(indicators.ema20)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">EMA 50:</span>
-              <span className="text-gray-100">{formatPrice(indicators.ema50)}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Stochastic */}
-        <div className="p-4 bg-gradient-to-r from-gray-700/20 to-gray-600/10 rounded-lg border border-gray-600/30">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-300">Stochastic</span>
-            <span className={`text-sm font-semibold ${getStochasticColor(indicators.stochastic.k, indicators.stochastic.d)}`}>
-              {getStochasticStatus(indicators.stochastic.k, indicators.stochastic.d)}
-            </span>
-          </div>
-          <div className="space-y-1 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-400">%K:</span>
-              <span className="text-gray-100">{formatIndicatorValue(safeNumber(indicators.stochastic.k), 1)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">%D:</span>
-              <span className="text-gray-100">{formatIndicatorValue(safeNumber(indicators.stochastic.d), 1)}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* OBV (On-Balance Volume) */}
-        {indicators.obv && (
-          <div className="p-4 bg-gradient-to-r from-gray-700/20 to-gray-600/10 rounded-lg border border-gray-600/30">
+        {/* Render indicators sorted by points */}
+        {sortedIndicators.map((indicator) => (
+          <div key={indicator.type} className="p-4 bg-gradient-to-r from-gray-700/20 to-gray-600/10 rounded-lg border border-gray-600/30">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-300">OBV (On-Balance Volume)</span>
-              <span className={`text-sm font-semibold ${getOBVTrendColor(indicators.obv.trend)}`}>
-                {indicators.obv.trend}
-              </span>
-            </div>
-            <div className="space-y-1 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-400">Current:</span>
-                <span className="text-gray-100">{formatOBVValue(indicators.obv.current)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Trend:</span>
-                <span className={getOBVTrendColor(indicators.obv.trend)}>{indicators.obv.trend}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Divergence:</span>
-                <span className={getOBVDivergenceColor(indicators.obv.divergence)}>
-                  {indicators.obv.divergence === 'NONE' ? 'None' : indicators.obv.divergence}
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-300">{indicator.name}</span>
+                <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
+                  indicator.points > 0 ? 'bg-blue-900/30 text-blue-400' : 'bg-gray-700/30 text-gray-400'
+                }`}>
+                  {indicator.points} pts
                 </span>
               </div>
+              <span className={`text-sm font-semibold ${
+                indicator.status === 'BULLISH' ? 'text-green-400' :
+                indicator.status === 'BEARISH' ? 'text-red-400' : 'text-yellow-400'
+              }`}>
+                {indicator.status}
+              </span>
             </div>
+            {renderIndicatorDetails(indicator.type)}
           </div>
-        )}
+        ))}
       </div>
     </div>
   );

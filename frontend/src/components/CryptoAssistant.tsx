@@ -243,103 +243,307 @@ export default function CryptoAssistant({ initialSymbol = 'BTCUSDT' }: CryptoAss
         </div>
       </div>
 
-      {/* Current Price Display */}
-      {(realTimeData || signalData) && (
-        <div className="bg-gradient-to-br from-gray-800/90 to-black/90 backdrop-blur-md rounded-xl p-6 mb-6 border border-gray-600/30 shadow-xl">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-100 mb-2">{selectedSymbol}</h2>
-              <div className="flex items-center gap-4">
-                <span className="text-3xl font-bold text-gray-100">
-                  {formatPrice(realTimeData?.price || signalData?.currentPrice || 0)}
-                </span>
-                <span className={`text-lg font-medium ${
-                  (realTimeData?.priceChange24h || parseFloat(signalData?.marketData?.priceChange24h || '0')) >= 0 ? 'text-green-400' : 'text-red-400'
-                }`}>
-                  {formatPercentage(realTimeData?.priceChange24h || parseFloat(signalData?.marketData?.priceChange24h || '0'))}
-                </span>
+      {/* Compact Above-the-Fold Layout */}
+      {(realTimeData || signalData) && signalData && signalData.signal && signalData.technicalIndicators && (
+        <div className="space-y-4 mb-6">
+          {/* Top Row: Coin Details + Trading Signal */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Coin Details */}
+            <div className="bg-gradient-to-br from-gray-800/90 to-black/90 backdrop-blur-md rounded-xl p-4 border border-gray-600/30 shadow-xl">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-100 mb-1">{selectedSymbol}</h2>
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl font-bold text-gray-100">
+                      {formatPrice(realTimeData?.price || signalData?.currentPrice || 0)}
+                    </span>
+                    <span className={`text-lg font-medium ${
+                      (realTimeData?.priceChange24h || parseFloat(signalData?.marketData?.priceChange24h || '0')) >= 0 ? 'text-green-400' : 'text-red-400'
+                    }`}>
+                      {formatPercentage(realTimeData?.priceChange24h || parseFloat(signalData?.marketData?.priceChange24h || '0'))}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm text-gray-400 mb-1">24h Volume</div>
+                  <div className="text-lg font-semibold text-gray-100">
+                    {new Intl.NumberFormat('en-US', {
+                      notation: 'compact',
+                      maximumFractionDigits: 2
+                    }).format(realTimeData?.volume || parseFloat(signalData?.marketData?.volume || '0'))}
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="text-right">
-              <div className="text-sm text-gray-400 mb-1">24h Volume</div>
-              <div className="text-lg font-semibold text-gray-100">
-                {new Intl.NumberFormat('en-US', {
-                  notation: 'compact',
-                  maximumFractionDigits: 2
-                }).format(realTimeData?.volume || parseFloat(signalData?.marketData?.volume || '0'))}
+
+            {/* Trading Signal Summary */}
+            <div className={`bg-gradient-to-br backdrop-blur-md rounded-xl p-4 border shadow-xl ${
+              signalData.signal.action === 'BUY' ? 'from-green-900/30 to-green-800/20 border-green-500/40' :
+              signalData.signal.action === 'SELL' ? 'from-red-900/30 to-red-800/20 border-red-500/40' :
+              'from-yellow-900/30 to-yellow-800/20 border-yellow-500/40'
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className={`${
+                    signalData.signal.action === 'BUY' ? 'text-green-400' :
+                    signalData.signal.action === 'SELL' ? 'text-red-400' : 'text-yellow-400'
+                  }`}>
+                    {signalData.signal.action === 'BUY' ? '📈' : signalData.signal.action === 'SELL' ? '📉' : '⚡'}
+                  </div>
+                  <span className={`text-xl font-bold ${
+                    signalData.signal.action === 'BUY' ? 'text-green-400' :
+                    signalData.signal.action === 'SELL' ? 'text-red-400' : 'text-yellow-400'
+                  }`}>
+                    {signalData.signal.action}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm text-gray-400">Confidence</div>
+                  <div className="text-lg font-bold text-white">{signalData.signal.confidence}%</div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>
+                  <span className="text-gray-400">Strength:</span>
+                  <span className="text-white font-semibold ml-1">{signalData.signal.strength}%</span>
+                </div>
+                <div>
+                  <span className="text-gray-400">Timeframe:</span>
+                  <span className="text-white font-semibold ml-1">{signalData.timeframe}</span>
+                </div>
               </div>
             </div>
           </div>
+
+          {/* Second Row: Technical Indicators + Pattern Analysis */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Compact Technical Indicators */}
+            <div className="bg-gradient-to-br from-gray-800/90 to-black/90 backdrop-blur-md rounded-xl p-4 border border-gray-600/30 shadow-xl">
+              <h3 className="text-lg font-semibold text-gray-100 mb-3 flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-gray-400" />
+                Technical Indicators
+              </h3>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">RSI:</span>
+                  <span className={`font-semibold ${
+                    signalData.technicalIndicators.rsi > 70 ? 'text-red-400' :
+                    signalData.technicalIndicators.rsi < 30 ? 'text-green-400' : 'text-yellow-400'
+                  }`}>
+                    {signalData.technicalIndicators.rsi > 70 ? 'Bearish' :
+                     signalData.technicalIndicators.rsi < 30 ? 'Bullish' : 'Neutral'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">MACD:</span>
+                  <span className={`font-semibold ${
+                    signalData.technicalIndicators.macd?.MACD > signalData.technicalIndicators.macd?.signal ? 'text-green-400' : 'text-red-400'
+                  }`}>
+                    {signalData.technicalIndicators.macd?.MACD > signalData.technicalIndicators.macd?.signal ? 'Bullish' : 'Bearish'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">EMA Cross:</span>
+                  <span className={`font-semibold ${
+                    signalData.technicalIndicators.ema20 > signalData.technicalIndicators.ema50 ? 'text-green-400' : 'text-red-400'
+                  }`}>
+                    {signalData.technicalIndicators.ema20 > signalData.technicalIndicators.ema50 ? 'Bullish' : 'Bearish'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Stochastic:</span>
+                  <span className={`font-semibold ${
+                    signalData.technicalIndicators.stochastic?.k > 80 ? 'text-red-400' :
+                    signalData.technicalIndicators.stochastic?.k < 20 ? 'text-green-400' : 'text-yellow-400'
+                  }`}>
+                    {signalData.technicalIndicators.stochastic?.k > 80 ? 'Bearish' :
+                     signalData.technicalIndicators.stochastic?.k < 20 ? 'Bullish' : 'Neutral'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Bollinger:</span>
+                  <span className={`font-semibold ${
+                    (realTimeData?.price || signalData?.currentPrice || 0) > signalData.technicalIndicators.bollingerBands?.upper ? 'text-red-400' :
+                    (realTimeData?.price || signalData?.currentPrice || 0) < signalData.technicalIndicators.bollingerBands?.lower ? 'text-green-400' : 'text-yellow-400'
+                  }`}>
+                    {(realTimeData?.price || signalData?.currentPrice || 0) > signalData.technicalIndicators.bollingerBands?.upper ? 'Bearish' :
+                     (realTimeData?.price || signalData?.currentPrice || 0) < signalData.technicalIndicators.bollingerBands?.lower ? 'Bullish' : 'Neutral'}
+                  </span>
+                </div>
+                {signalData.technicalIndicators.obv && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">OBV:</span>
+                    <span className={`font-semibold ${
+                      signalData.technicalIndicators.obv.trend === 'BULLISH' ? 'text-green-400' :
+                      signalData.technicalIndicators.obv.trend === 'BEARISH' ? 'text-red-400' : 'text-yellow-400'
+                    }`}>
+                      {signalData.technicalIndicators.obv.trend === 'BULLISH' ? 'Bullish' :
+                       signalData.technicalIndicators.obv.trend === 'BEARISH' ? 'Bearish' : 'Neutral'}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Compact Pattern Analysis */}
+            <div className="bg-gradient-to-br from-gray-800/90 to-black/90 backdrop-blur-md rounded-xl p-4 border border-gray-600/30 shadow-xl">
+              <h3 className="text-lg font-semibold text-gray-100 mb-3 flex items-center gap-2">
+                <div className="w-4 h-4 text-gray-400">👁</div>
+                Pattern Analysis
+              </h3>
+              <div className="space-y-2">
+                {/* Pattern Summary */}
+                <div className="grid grid-cols-3 gap-2 text-center text-sm mb-3">
+                  <div>
+                    <div className="text-green-400 font-semibold">
+                      {[...(signalData.chartPatterns || []), ...(signalData.candlestickPatterns || [])].filter(p => p.type === 'BULLISH').length}
+                    </div>
+                    <div className="text-xs text-gray-400">Bullish</div>
+                  </div>
+                  <div>
+                    <div className="text-red-400 font-semibold">
+                      {[...(signalData.chartPatterns || []), ...(signalData.candlestickPatterns || [])].filter(p => p.type === 'BEARISH').length}
+                    </div>
+                    <div className="text-xs text-gray-400">Bearish</div>
+                  </div>
+                  <div>
+                    <div className="text-yellow-400 font-semibold">
+                      {[...(signalData.chartPatterns || []), ...(signalData.candlestickPatterns || [])].filter(p => p.type === 'NEUTRAL').length}
+                    </div>
+                    <div className="text-xs text-gray-400">Neutral</div>
+                  </div>
+                </div>
+
+                {/* Top Patterns */}
+                <div className="space-y-1">
+                  {[...(signalData.chartPatterns || []), ...(signalData.candlestickPatterns || [])]
+                    .sort((a, b) => b.confidence - a.confidence)
+                    .slice(0, 3)
+                    .map((pattern, index) => (
+                      <div key={index} className="flex justify-between items-center text-sm">
+                        <span className="text-gray-300 truncate">{pattern.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs px-1 py-0.5 rounded ${
+                            pattern.type === 'BULLISH' ? 'bg-green-900/30 text-green-400' :
+                            pattern.type === 'BEARISH' ? 'bg-red-900/30 text-red-400' :
+                            'bg-yellow-900/30 text-yellow-400'
+                          }`}>
+                            {pattern.type}
+                          </span>
+                          <span className="text-white font-semibold">{pattern.confidence}%</span>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Third Row: Entry Points & Take Profits (Only for BUY/HOLD signals) */}
+          {signalData.signal.action !== 'SELL' && (
+            <div className="bg-gradient-to-br from-gray-800/90 to-black/90 backdrop-blur-md rounded-xl p-4 border border-gray-600/30 shadow-xl">
+              <h3 className="text-lg font-semibold text-gray-100 mb-3 flex items-center gap-2">
+                <div className="w-4 h-4 text-gray-400">🎯</div>
+                Trading Levels
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
+                <div className="text-center p-2 bg-gray-700/30 rounded-lg">
+                  <div className="text-gray-400 mb-1">Entry</div>
+                  <div className="font-semibold text-white">{formatPrice(signalData.signal.entry)}</div>
+                </div>
+                <div className="text-center p-2 bg-red-900/20 rounded-lg border border-red-500/30">
+                  <div className="text-gray-400 mb-1">Stop Loss</div>
+                  <div className="font-semibold text-red-400">{formatPrice(signalData.signal.stopLoss)}</div>
+                </div>
+                <div className="text-center p-2 bg-green-900/20 rounded-lg border border-green-500/30">
+                  <div className="text-gray-400 mb-1">TP1</div>
+                  <div className="font-semibold text-green-400">{formatPrice(signalData.signal.takeProfit1)}</div>
+                </div>
+                <div className="text-center p-2 bg-green-900/20 rounded-lg border border-green-500/30">
+                  <div className="text-gray-400 mb-1">TP2</div>
+                  <div className="font-semibold text-green-400">{formatPrice(signalData.signal.takeProfit2)}</div>
+                </div>
+                <div className="text-center p-2 bg-green-900/20 rounded-lg border border-green-500/30">
+                  <div className="text-gray-400 mb-1">TP3</div>
+                  <div className="font-semibold text-green-400">{formatPrice(signalData.signal.takeProfit3)}</div>
+                </div>
+              </div>
+
+              {/* Risk/Reward Summary */}
+              <div className="grid grid-cols-3 gap-3 mt-3 text-sm">
+                <div className="text-center p-2 bg-gray-700/30 rounded-lg">
+                  <div className="text-gray-400 mb-1">Risk/Reward</div>
+                  <div className="font-semibold text-white">
+                    {signalData.signal.stopLoss && signalData.signal.takeProfit1 ?
+                      (((signalData.signal.takeProfit1 - signalData.signal.entry) / (signalData.signal.entry - signalData.signal.stopLoss))).toFixed(2) :
+                      'N/A'
+                    }
+                  </div>
+                </div>
+                <div className="text-center p-2 bg-gray-700/30 rounded-lg">
+                  <div className="text-gray-400 mb-1">Potential Gain</div>
+                  <div className="font-semibold text-green-400">
+                    {signalData.signal.takeProfit1 ?
+                      `${(((signalData.signal.takeProfit1 - signalData.signal.entry) / signalData.signal.entry) * 100).toFixed(1)}%` :
+                      'N/A'
+                    }
+                  </div>
+                </div>
+                <div className="text-center p-2 bg-gray-700/30 rounded-lg">
+                  <div className="text-gray-400 mb-1">Max Risk</div>
+                  <div className="font-semibold text-red-400">
+                    {signalData.signal.stopLoss ?
+                      `${(((signalData.signal.entry - signalData.signal.stopLoss) / signalData.signal.entry) * 100).toFixed(1)}%` :
+                      'N/A'
+                    }
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Signal Display */}
+      {/* Detailed Sections (Below the fold - user can scroll to see these) */}
       {signalData && signalData.signal && signalData.technicalIndicators && (
         <div className="space-y-6 mb-6">
-          {/* Main Signal and Trading Levels */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              <SignalDisplay signalData={signalData} loading={loading} />
-            </div>
-            <div>
-              <TechnicalIndicators
-                indicators={signalData.technicalIndicators}
-                currentPrice={realTimeData?.price || signalData?.currentPrice || 0}
-              />
-            </div>
+          {/* Detailed Technical Indicators */}
+          <div className="bg-gradient-to-br from-gray-800/90 to-black/90 backdrop-blur-md rounded-xl p-6 border border-gray-600/30 shadow-xl">
+            <h3 className="text-xl font-semibold text-gray-100 mb-4 flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-gray-400" />
+              Detailed Technical Analysis
+            </h3>
+            <TechnicalIndicators
+              indicators={signalData.technicalIndicators}
+              currentPrice={realTimeData?.price || signalData?.currentPrice || 0}
+              compact={true}
+            />
           </div>
 
-          {/* Trading Summary Card */}
+          {/* Detailed Pattern Analysis */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <PatternAnalysis
+              chartPatterns={signalData.chartPatterns}
+              candlestickPatterns={signalData.candlestickPatterns}
+            />
+            <MarketOverview />
+          </div>
+
+          {/* Signal Reasoning */}
           <div className="bg-gradient-to-br from-gray-800/90 to-black/90 backdrop-blur-md rounded-xl p-6 border border-gray-600/30 shadow-xl">
             <h3 className="text-xl font-semibold text-gray-100 mb-4 flex items-center gap-2">
               <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-              Trading Summary
+              Signal Reasoning
             </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="text-center p-3 bg-gray-700/30 rounded-lg">
-                <div className="text-sm text-gray-400 mb-1">Risk/Reward</div>
-                <div className="text-lg font-semibold text-white">
-                  {signalData.signal.stopLoss && signalData.signal.takeProfit1 ?
-                    (((signalData.signal.takeProfit1 - signalData.signal.entry) / (signalData.signal.entry - signalData.signal.stopLoss))).toFixed(2) :
-                    'N/A'
-                  }
+            <div className="space-y-2">
+              {signalData.signal.reasoning?.map((reason, index) => (
+                <div key={index} className="flex items-start gap-2 text-gray-300">
+                  <div className="w-1.5 h-1.5 bg-gray-400 rounded-full mt-2 flex-shrink-0"></div>
+                  <span>{reason}</span>
                 </div>
-              </div>
-              <div className="text-center p-3 bg-gray-700/30 rounded-lg">
-                <div className="text-sm text-gray-400 mb-1">Potential Gain</div>
-                <div className="text-lg font-semibold text-green-400">
-                  {signalData.signal.takeProfit1 ?
-                    `${(((signalData.signal.takeProfit1 - signalData.signal.entry) / signalData.signal.entry) * 100).toFixed(1)}%` :
-                    'N/A'
-                  }
-                </div>
-              </div>
-              <div className="text-center p-3 bg-gray-700/30 rounded-lg">
-                <div className="text-sm text-gray-400 mb-1">Max Risk</div>
-                <div className="text-lg font-semibold text-red-400">
-                  {signalData.signal.stopLoss ?
-                    `${(((signalData.signal.entry - signalData.signal.stopLoss) / signalData.signal.entry) * 100).toFixed(1)}%` :
-                    'N/A'
-                  }
-                </div>
-              </div>
-              <div className="text-center p-3 bg-gray-700/30 rounded-lg">
-                <div className="text-sm text-gray-400 mb-1">Timeframe</div>
-                <div className="text-lg font-semibold text-white">{signalData.timeframe}</div>
-              </div>
+              ))}
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Pattern Analysis */}
-      {signalData && signalData.chartPatterns && signalData.candlestickPatterns && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          <PatternAnalysis
-            chartPatterns={signalData.chartPatterns}
-            candlestickPatterns={signalData.candlestickPatterns}
-          />
-          <MarketOverview />
         </div>
       )}
 

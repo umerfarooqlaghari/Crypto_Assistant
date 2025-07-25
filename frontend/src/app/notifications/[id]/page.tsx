@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { ArrowLeft, Clock, TrendingUp, TrendingDown, Minus, AlertCircle, CheckCircle, Info } from 'lucide-react';
 import { getApiUrl } from '../../../utils/api';
 
@@ -248,10 +249,29 @@ export default function NotificationDetailPage() {
           
           <div className="bg-gray-800 rounded-lg p-6">
             <h3 className="text-lg font-semibold mb-2">Symbol</h3>
-            <div className="text-2xl font-bold text-white">{notification.symbol}</div>
+            <Link
+              href={`/analysis/${notification.symbol.toLowerCase()}`}
+              className="inline-block hover:bg-gray-700 rounded-lg p-2 -m-2 transition-colors group"
+            >
+              <div className="text-2xl font-bold text-white group-hover:text-blue-400 transition-colors">
+                {notification.symbol}
+              </div>
+              <div className="text-xs text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                Click to analyze →
+              </div>
+            </Link>
             <div className="text-sm text-gray-400 mt-2">
               Timeframe: {notification.timeframe || 'N/A'}
             </div>
+
+            {/* Go to Analysis Button */}
+            <Link
+              href={`/analysis/${notification.symbol.toLowerCase()}`}
+              className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+            >
+              <TrendingUp className="h-4 w-4" />
+              Go to coin analysis
+            </Link>
           </div>
         </div>
 
