@@ -21,6 +21,11 @@ interface TechnicalIndicatorsProps {
       k: number;
       d: number;
     };
+    obv?: {
+      current: number;
+      trend: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+      divergence: 'BULLISH' | 'BEARISH' | 'NONE';
+    };
   };
   currentPrice?: number;
 }
@@ -96,6 +101,32 @@ export default function TechnicalIndicators({ indicators, currentPrice }: Techni
     if (k > 80 && d > 80) return 'Overbought';
     if (k < 20 && d < 20) return 'Oversold';
     return 'Neutral';
+  };
+
+  // OBV helper functions
+  const getOBVTrendColor = (trend: string) => {
+    switch (trend) {
+      case 'BULLISH': return 'text-green-400';
+      case 'BEARISH': return 'text-red-400';
+      default: return 'text-yellow-400';
+    }
+  };
+
+  const getOBVDivergenceColor = (divergence: string) => {
+    switch (divergence) {
+      case 'BULLISH': return 'text-green-400';
+      case 'BEARISH': return 'text-red-400';
+      default: return 'text-gray-400';
+    }
+  };
+
+  const formatOBVValue = (value: number) => {
+    if (Math.abs(value) >= 1000000) {
+      return (value / 1000000).toFixed(2) + 'M';
+    } else if (Math.abs(value) >= 1000) {
+      return (value / 1000).toFixed(2) + 'K';
+    }
+    return value.toFixed(2);
   };
 
   const formatPrice = (price: number) => {
@@ -276,6 +307,34 @@ export default function TechnicalIndicators({ indicators, currentPrice }: Techni
             </div>
           </div>
         </div>
+
+        {/* OBV (On-Balance Volume) */}
+        {indicators.obv && (
+          <div className="p-4 bg-gradient-to-r from-gray-700/20 to-gray-600/10 rounded-lg border border-gray-600/30">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-gray-300">OBV (On-Balance Volume)</span>
+              <span className={`text-sm font-semibold ${getOBVTrendColor(indicators.obv.trend)}`}>
+                {indicators.obv.trend}
+              </span>
+            </div>
+            <div className="space-y-1 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-400">Current:</span>
+                <span className="text-gray-100">{formatOBVValue(indicators.obv.current)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Trend:</span>
+                <span className={getOBVTrendColor(indicators.obv.trend)}>{indicators.obv.trend}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Divergence:</span>
+                <span className={getOBVDivergenceColor(indicators.obv.divergence)}>
+                  {indicators.obv.divergence === 'NONE' ? 'None' : indicators.obv.divergence}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

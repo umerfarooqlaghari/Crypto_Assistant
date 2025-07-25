@@ -20,6 +20,11 @@ export interface TechnicalIndicatorResults {
     k: number;
     d: number;
   };
+  obv: {
+    current: number;
+    trend: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+    divergence: 'BULLISH' | 'BEARISH' | 'NONE';
+  };
 }
 
 export interface ChartPattern {
@@ -80,6 +85,7 @@ export class AdvancedTechnicalAnalysis {
       const closes = ohlcv.map(candle => candle[4]);
       const highs = ohlcv.map(candle => candle[2]);
       const lows = ohlcv.map(candle => candle[3]);
+      const volumes = ohlcv.map(candle => candle[5]);
 
       // 1. RSI (Relative Strength Index)
       const rsiValues = RSI.calculate({ values: closes, period: 14 });
@@ -133,6 +139,9 @@ export class AdvancedTechnicalAnalysis {
       });
       const stochastic = stochValues[stochValues.length - 1] || { k: 50, d: 50 };
 
+      // 6. OBV (On-Balance Volume)
+      const obv = this.calculateOBV(closes, volumes);
+
       // Debug logging for small price values
       if (closes[closes.length - 1] < 0.01) {
         logDebug(`Small price detected for ${symbol}: ${closes[closes.length - 1]}`);
@@ -146,7 +155,8 @@ export class AdvancedTechnicalAnalysis {
         bollingerBands,
         ema20,
         ema50,
-        stochastic
+        stochastic,
+        obv
       };
 
     } catch (error) {
@@ -344,6 +354,24 @@ export class AdvancedTechnicalAnalysis {
     } else if (indicators.stochastic.k > 80 && indicators.stochastic.d > 80) {
       bearishScore += 15;
       reasoning.push('Stochastic overbought');
+    }
+
+    // OBV (On-Balance Volume) analysis
+    if (indicators.obv.trend === 'BULLISH') {
+      bullishScore += 18;
+      reasoning.push('OBV showing bullish trend');
+    } else if (indicators.obv.trend === 'BEARISH') {
+      bearishScore += 18;
+      reasoning.push('OBV showing bearish trend');
+    }
+
+    // OBV divergence analysis (additional points for divergence signals)
+    if (indicators.obv.divergence === 'BULLISH') {
+      bullishScore += 12;
+      reasoning.push('OBV bullish divergence detected');
+    } else if (indicators.obv.divergence === 'BEARISH') {
+      bearishScore += 12;
+      reasoning.push('OBV bearish divergence detected');
     }
 
     return { bullishScore, bearishScore, reasoning };
@@ -617,5 +645,81 @@ export class AdvancedTechnicalAnalysis {
     }
 
     return sum / (values.length - 1);
+  }
+
+  // Calculate OBV (On-Balance Volume) with trend and divergence analysis
+  private calculateOBV(closes: number[], volumes: number[]): {
+    current: number;
+    trend: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+    divergence: 'BULLISH' | 'BEARISH' | 'NONE';
+  } {
+    if (closes.length < 2 || volumes.length < 2 || closes.length !== volumes.length) {
+      return {
+        current: 0,
+        trend: 'NEUTRAL',
+        divergence: 'NONE'
+      };
+    }
+
+    // Calculate OBV values
+    const obvValues: number[] = [volumes[0]]; // Start with first volume
+
+    for (let i = 1; i < closes.length; i++) {
+      const prevClose = closes[i - 1];
+      const currentClose = closes[i];
+      const currentVolume = volumes[i];
+      const prevOBV = obvValues[i - 1];
+
+      if (currentClose > prevClose) {
+        // Price up: add volume
+        obvValues.push(prevOBV + currentVolume);
+      } else if (currentClose < prevClose) {
+        // Price down: subtract volume
+        obvValues.push(prevOBV - currentVolume);
+      } else {
+        // Price unchanged: OBV unchanged
+        obvValues.push(prevOBV);
+      }
+    }
+
+    const currentOBV = obvValues[obvValues.length - 1];
+
+    // Analyze OBV trend (last 10 periods)
+    const recentOBV = obvValues.slice(-Math.min(10, obvValues.length));
+    const obvTrend = this.calculateTrend(recentOBV);
+
+    let trend: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+    if (obvTrend > 0.02) {
+      trend = 'BULLISH';
+    } else if (obvTrend < -0.02) {
+      trend = 'BEARISH';
+    } else {
+      trend = 'NEUTRAL';
+    }
+
+    // Analyze price vs OBV divergence (last 5 periods)
+    let divergence: 'BULLISH' | 'BEARISH' | 'NONE' = 'NONE';
+    if (closes.length >= 5 && obvValues.length >= 5) {
+      const recentPrices = closes.slice(-5);
+      const recentOBVForDivergence = obvValues.slice(-5);
+
+      const priceTrend = this.calculateTrend(recentPrices);
+      const obvTrendForDivergence = this.calculateTrend(recentOBVForDivergence);
+
+      // Bullish divergence: price falling but OBV rising
+      if (priceTrend < -0.01 && obvTrendForDivergence > 0.01) {
+        divergence = 'BULLISH';
+      }
+      // Bearish divergence: price rising but OBV falling
+      else if (priceTrend > 0.01 && obvTrendForDivergence < -0.01) {
+        divergence = 'BEARISH';
+      }
+    }
+
+    return {
+      current: currentOBV,
+      trend,
+      divergence
+    };
   }
 }

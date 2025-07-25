@@ -7,7 +7,7 @@ The system uses a comprehensive scoring algorithm that combines 5 core technical
 indicators, chart patterns, and candlestick patterns to generate confidence and 
 strength signals for trading decisions.
 
-CORE TECHNICAL INDICATORS (5 INDICATORS)
+CORE TECHNICAL INDICATORS (6 INDICATORS)
 ===============================================================================
 
 1. RSI (RELATIVE STRENGTH INDEX)
@@ -51,6 +51,18 @@ CORE TECHNICAL INDICATORS (5 INDICATORS)
    - Scoring:
      * %K < 20 AND %D < 20: +15 BULLISH points (oversold)
      * %K > 80 AND %D > 80: +15 BEARISH points (overbought)
+
+6. OBV (ON-BALANCE VOLUME)
+   - Calculation: Cumulative volume based on price direction
+   - Components: Current OBV, Trend Analysis, Divergence Detection
+   - Trend Analysis: Based on last 10 periods
+   - Divergence Analysis: Price vs OBV comparison over last 5 periods
+   - Scoring:
+     * OBV Bullish Trend: +18 BULLISH points
+     * OBV Bearish Trend: +18 BEARISH points
+     * OBV Bullish Divergence: +12 BULLISH points (additional)
+     * OBV Bearish Divergence: +12 BEARISH points (additional)
+   - Maximum possible: 30 points (18 trend + 12 divergence)
 
 CHART PATTERNS (ADVANCED DETECTION)
 ===============================================================================
@@ -117,17 +129,18 @@ EXAMPLE CALCULATION
 
 Sample Analysis for BTCUSDT:
 - RSI: 25 (oversold) → +25 bullish points
-- MACD: Bullish crossover → +20 bullish points  
+- MACD: Bullish crossover → +20 bullish points
 - EMA: EMA20 > EMA50 → +15 bullish points
 - Stochastic: 15/18 (oversold) → +15 bullish points
+- OBV: Bullish trend + bullish divergence → +30 bullish points (18+12)
 - Chart Pattern: Double Bottom (70%) → +21 bullish points
 - Candlestick: Hammer (75%) → +15 bullish points
 
-Total: 111 bullish points, 0 bearish points
-Net Score: +111
+Total: 141 bullish points, 0 bearish points
+Net Score: +141
 Action: BUY (score > 20)
-Confidence: min(max((111/50) × 100, 60), 100) = 100%
-Strength: 111
+Confidence: min(max((141/50) × 100, 60), 100) = 100%
+Strength: 141
 
 CONFIDENCE RANGES
 ===============================================================================

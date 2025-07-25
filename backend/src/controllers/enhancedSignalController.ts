@@ -136,6 +136,11 @@ export const generateAdvancedSignals = async (req: Request, res: Response) => {
                 stochastic: {
                     k: indicators.stochastic.k,
                     d: indicators.stochastic.d
+                },
+                obv: {
+                    current: indicators.obv.current,
+                    trend: indicators.obv.trend,
+                    divergence: indicators.obv.divergence
                 }
             },
             chartPatterns,
