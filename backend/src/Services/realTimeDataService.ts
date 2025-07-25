@@ -1,10 +1,8 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import cron from 'node-cron';
-import { BinanceService, BinanceTicker } from './binanceService';
-import { CoinGeckoService } from './coinGeckoService';
+import { BinanceService } from './binanceService';
 import { AdvancedTechnicalAnalysis, TradingSignal } from './advancedTechnicalAnalysis';
-import { CoinListService } from './coinListService';
 import { logDebug, logError, logInfo } from '../utils/logger';
 import { config } from '../config/config';
 
@@ -31,7 +29,6 @@ export interface ClientSubscription {
 export class RealTimeDataService {
   private io: SocketIOServer;
   private binanceService: BinanceService;
-  private coinGeckoService: CoinGeckoService;
   private technicalAnalysis: AdvancedTechnicalAnalysis;
   private subscriptions: Map<string, ClientSubscription> = new Map();
   private activeSymbols: Set<string> = new Set();
@@ -50,7 +47,6 @@ export class RealTimeDataService {
     });
 
     this.binanceService = new BinanceService();
-    this.coinGeckoService = new CoinGeckoService();
     this.technicalAnalysis = new AdvancedTechnicalAnalysis();
 
     this.initializeSocketHandlers();
@@ -214,18 +210,6 @@ export class RealTimeDataService {
     logInfo('Started real-time data updates (WebSocket-based, technical analysis: real-time + 5min backup)');
   }
 
-  private async updateAllActiveSymbols() {
-    try {
-      const updatePromises = Array.from(this.activeSymbols).map(symbol => 
-        this.updateSymbolData(symbol)
-      );
-
-      await Promise.allSettled(updatePromises);
-    } catch (error) {
-      logError('Error updating active symbols', error as Error);
-    }
-  }
-
   private async updateSymbolData(symbol: string) {
     try {
       // Get latest price data from WebSocket cache (no REST API calls)
@@ -358,7 +342,7 @@ export class RealTimeDataService {
     });
   }
 
-  // Broadcast individual coin confidence updates from smart queue
+  // Broadcast individual coin confidence updates (real-time WebSocket approach)
   broadcastCoinConfidenceUpdate(coinData: any) {
     this.io.emit('coinConfidenceUpdate', {
       symbol: coinData.symbol,

@@ -15,6 +15,8 @@ import { cleanupCoinListService, setRealTimeService } from './controllers/coinLi
 import prismaService from './Services/prismaService';
 import DefaultSettingsService from './Services/defaultSettingsService';
 import { notificationRuleChecker } from './Services/notificationRuleChecker';
+import { serviceManager } from './Services/serviceManager';
+import { getCoinListService } from './controllers/coinListController';
 
 const app = express();
 const server = createServer(app);
@@ -25,10 +27,24 @@ const realTimeService = new RealTimeDataService(server);
 // Connect coin list service to real-time service for broadcasting updates
 setRealTimeService(realTimeService);
 
-// Initialize coin list service immediately to start background updates
-import { getCoinListService } from './controllers/coinListController';
-const coinListService = getCoinListService();
-console.log('🔄 Coin list service initialized - background updates started');
+// Initialize shared services with WebSocket subscriptions FIRST
+async function initializeServices() {
+  try {
+    console.log('🚀 Initializing shared services with WebSocket support...');
+    await serviceManager.initialize();
+    console.log('✅ Shared services initialized successfully');
+
+    // Now initialize coin list service which will use the shared services
+    const coinListService = getCoinListService(); // eslint-disable-line @typescript-eslint/no-unused-vars
+    console.log('🔄 Coin list service initialized - background updates started');
+  } catch (error) {
+    console.error('❌ Failed to initialize services:', error);
+    process.exit(1);
+  }
+}
+
+// Initialize services
+initializeServices();
 
 // Connect notification rule checker to socket.io for real-time notifications
 notificationRuleChecker.setSocketIO(realTimeService.getSocketIO());

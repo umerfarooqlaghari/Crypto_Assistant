@@ -1,30 +1,33 @@
 import { Request, Response } from 'express';
-import { BinanceService } from '../Services/binanceService';
-import { CoinGeckoService } from '../Services/coinGeckoService';
-import { AdvancedTechnicalAnalysis } from '../Services/advancedTechnicalAnalysis';
+import { getBinanceService, getTechnicalAnalysisService, getCoinGeckoService } from '../Services/serviceManager';
 import EnhancedSignalOrchestrator from '../Services/enhancedSignalOrchestrator';
 import { logSignalGeneration, logError, logInfo } from '../utils/logger';
 import { ExchangeError } from '../middleware/errorHandler';
+import { BinanceSymbol } from '../Services/binanceService';
 
-const binanceService = new BinanceService();
-const coinGeckoService = new CoinGeckoService();
-const technicalAnalysis = new AdvancedTechnicalAnalysis();
-const signalOrchestrator = new EnhancedSignalOrchestrator();
+// Lazy initialization to avoid accessing services before ServiceManager is initialized
+const getServices = () => ({
+  binanceService: getBinanceService(),
+  coinGeckoService: getCoinGeckoService(),
+  technicalAnalysis: getTechnicalAnalysisService(),
+  signalOrchestrator: new EnhancedSignalOrchestrator()
+});
 
 // Get all available trading symbols
 export const getAvailableSymbols = async (_req: Request, res: Response) => {
     try {
         logInfo('Fetching available trading symbols');
-        
-        const symbols = await binanceService.getAllSymbols();
+
+        const { binanceService } = getServices();
+        const symbols = await (binanceService as any).getAllSymbols();
         
         // Filter and format for frontend
         const majorPairs = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'ADAUSDT', 'XRPUSDT', 'SOLUSDT', 'DOGEUSDT', 'AVAXUSDT', 'DOTUSDT', 'MATICUSDT'];
 
         // Ensure major pairs are always included
-        const majorSymbols = symbols.filter(symbol => majorPairs.includes(symbol.symbol));
+        const majorSymbols = symbols.filter((symbol: BinanceSymbol) => majorPairs.includes(symbol.symbol));
         const otherSymbols = symbols
-            .filter(symbol => !majorPairs.includes(symbol.symbol) && parseFloat(symbol.volume) > 1000000)
+            .filter((symbol: BinanceSymbol) => !majorPairs.includes(symbol.symbol) && parseFloat(symbol.volume) > 1000000)
             .slice(0, 90); // Leave room for major pairs
 
         const allSymbols = [...majorSymbols, ...otherSymbols]
@@ -65,21 +68,23 @@ export const generateAdvancedSignals = async (req: Request, res: Response) => {
 
         logInfo(`Generating advanced signals for ${symbol} on ${timeframe}`);
 
+        const { binanceService, technicalAnalysis } = getServices();
+
         // Get current price and market data
         const [currentPrice, ticker24hr] = await Promise.all([
-            binanceService.getCurrentPrice(symbol as string),
-            binanceService.getTicker24hr(symbol as string)
+            (binanceService as any).getCurrentPrice(symbol as string),
+            (binanceService as any).getTicker24hr(symbol as string)
         ]);
 
         // Calculate technical indicators
         const indicators = await technicalAnalysis.calculateIndicators(
-            'binance', 
-            symbol as string, 
+            'binance',
+            symbol as string,
             timeframe as string
         );
 
         // Get OHLCV data for pattern analysis
-        const ohlcv = await binanceService.getOHLCV(symbol as string, timeframe as string, 100);
+        const ohlcv = await (binanceService as any).getOHLCV(symbol as string, timeframe as string, 100);
 
         // Detect chart patterns
         const chartPatterns = technicalAnalysis.detectChartPatterns(ohlcv, indicators);
@@ -171,19 +176,21 @@ export const getMultiTimeframeAnalysis = async (req: Request, res: Response) => 
 
         logInfo(`Generating multi-timeframe analysis for ${symbol}`);
 
-        const analysisPromises = timeframes.map(async (timeframe) => {
+        const { binanceService, technicalAnalysis } = getServices();
+
+        const analysisPromises = timeframes.map(async (timeframe: string) => {
             try {
                 const indicators = await technicalAnalysis.calculateIndicators(
-                    'binance', 
-                    symbol as string, 
+                    'binance',
+                    symbol as string,
                     timeframe
                 );
 
-                const ohlcv = await binanceService.getOHLCV(symbol as string, timeframe, 50);
+                const ohlcv = await (binanceService as any).getOHLCV(symbol as string, timeframe, 50);
                 const chartPatterns = technicalAnalysis.detectChartPatterns(ohlcv, indicators);
                 const candlestickPatterns = technicalAnalysis.detectCandlestickPatterns(ohlcv);
-                
-                const currentPrice = await binanceService.getCurrentPrice(symbol as string);
+
+                const currentPrice = await (binanceService as any).getCurrentPrice(symbol as string);
                 const signal = technicalAnalysis.generateTradingSignal(
                     currentPrice, indicators, chartPatterns, candlestickPatterns
                 );
@@ -252,24 +259,26 @@ export const getMarketOverview = async (_req: Request, res: Response) => {
     try {
         logInfo('Fetching market overview');
 
+        const { binanceService, coinGeckoService } = getServices();
+
         const [symbols, globalData] = await Promise.all([
-            binanceService.getAllSymbols(),
+            (binanceService as any).getAllSymbols(),
             coinGeckoService.getGlobalData().catch(() => null)
         ]);
 
         // Get top gainers and losers
         const sortedByChange = symbols
-            .filter(s => parseFloat(s.volume) > 100000)
-            .sort((a, b) => parseFloat(b.priceChangePercent) - parseFloat(a.priceChangePercent));
+            .filter((s: any) => parseFloat(s.volume) > 100000)
+            .sort((a: any, b: any) => parseFloat(b.priceChangePercent) - parseFloat(a.priceChangePercent));
 
-        const topGainers = sortedByChange.slice(0, 10).map(s => ({
+        const topGainers = sortedByChange.slice(0, 10).map((s: any) => ({
             symbol: s.symbol,
             price: parseFloat(s.price),
             change: parseFloat(s.priceChangePercent),
             volume: parseFloat(s.volume)
         }));
 
-        const topLosers = sortedByChange.slice(-10).reverse().map(s => ({
+        const topLosers = sortedByChange.slice(-10).reverse().map((s: any) => ({
             symbol: s.symbol,
             price: parseFloat(s.price),
             change: parseFloat(s.priceChangePercent),
@@ -278,9 +287,9 @@ export const getMarketOverview = async (_req: Request, res: Response) => {
 
         // Get top by volume
         const topByVolume = symbols
-            .sort((a, b) => parseFloat(b.volume) - parseFloat(a.volume))
+            .sort((a: BinanceSymbol, b: BinanceSymbol) => parseFloat(b.volume) - parseFloat(a.volume))
             .slice(0, 10)
-            .map(s => ({
+            .map((s: BinanceSymbol) => ({
                 symbol: s.symbol,
                 price: parseFloat(s.price),
                 change: parseFloat(s.priceChangePercent),
@@ -316,6 +325,8 @@ export const generateEnhancedSignalWithNotifications = async (req: Request, res:
 
         logInfo(`Generating enhanced signal with notifications for ${symbol} ${timeframe}`);
 
+        const { signalOrchestrator } = getServices();
+
         const result = await signalOrchestrator.processSignal(
             symbol as string,
             timeframe as string,
@@ -346,6 +357,8 @@ export const generateMultiTimeframeWithNotifications = async (req: Request, res:
 
         logInfo(`Generating multi-timeframe analysis with notifications for ${symbol}`);
 
+        const { signalOrchestrator } = getServices();
+
         const result = await signalOrchestrator.processMultiTimeframeSignal(
             symbol as string,
             customTimeframes,
@@ -374,6 +387,8 @@ export const processBatchSignals = async (req: Request, res: Response) => {
 
         logInfo(`Processing batch signals for ${symbols.length} symbols`);
 
+        const { signalOrchestrator } = getServices();
+
         const results = await signalOrchestrator.processBatchSignals(
             symbols,
             timeframe,
@@ -386,8 +401,8 @@ export const processBatchSignals = async (req: Request, res: Response) => {
                 results,
                 summary: {
                     total: symbols.length,
-                    successful: results.filter(r => r.saved).length,
-                    totalNotifications: results.reduce((sum, r) => sum + r.notifications.length, 0)
+                    successful: results.filter((r: any) => r.saved).length,
+                    totalNotifications: results.reduce((sum: any, r: any) => sum + r.notifications.length, 0)
                 }
             },
             timestamp: new Date().toISOString()
@@ -402,6 +417,8 @@ export const processBatchSignals = async (req: Request, res: Response) => {
 export const getProcessingStats = async (req: Request, res: Response) => {
     try {
         const { days = 7 } = req.query;
+
+        const { signalOrchestrator } = getServices();
 
         const stats = await signalOrchestrator.getProcessingStats(parseInt(days as string));
 

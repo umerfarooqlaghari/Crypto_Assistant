@@ -51,11 +51,11 @@ export interface TradingSignal {
 export class AdvancedTechnicalAnalysis {
   private binanceService: BinanceService;
 
-  constructor() {
-    this.binanceService = new BinanceService();
+  constructor(binanceService?: BinanceService) {
+    this.binanceService = binanceService || new BinanceService();
   }
 
-  // Calculate top 5 technical indicators using Binance API directly
+  // Calculate top 5 technical indicators using WebSocket cached data
   async calculateIndicators(
     exchange: string,
     symbol: string,
@@ -63,9 +63,9 @@ export class AdvancedTechnicalAnalysis {
     periods: number = 100
   ): Promise<TechnicalIndicatorResults> {
     try {
-      logDebug(`Calculating indicators for ${symbol} on ${timeframe} using Binance API`);
+      logDebug(`Calculating indicators for ${symbol} on ${timeframe} using WebSocket cached data`);
 
-      // Use Binance API directly instead of CCXT
+      // Use WebSocket cached OHLCV data instead of REST API calls
       const ohlcv = await this.binanceService.getOHLCV(symbol, timeframe, periods);
 
       // Require 50 data points for accurate technical analysis

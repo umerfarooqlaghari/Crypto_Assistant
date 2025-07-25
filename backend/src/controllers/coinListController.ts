@@ -80,7 +80,8 @@ export const getCoinData = async (req: Request, res: Response): Promise<void> =>
     logInfo(`Fetching data for coin: ${normalizedSymbol}`);
     
     const service = getCoinListService();
-    const coinData = service.getCachedCoin(normalizedSymbol);
+    const currentCoinList = service.getCurrentCoinList();
+    const coinData = currentCoinList.find(coin => coin.symbol === normalizedSymbol);
     
     if (!coinData) {
       res.status(404).json({
@@ -106,25 +107,25 @@ export const getCoinData = async (req: Request, res: Response): Promise<void> =>
   }
 };
 
-// Refresh coin list cache
+// Refresh coin list (WebSocket-only approach)
 export const refreshCoinList = async (req: Request, res: Response): Promise<void> => {
   try {
-    logInfo('Manual refresh of coin list cache requested');
-    
+    logInfo('Manual refresh of coin list requested (WebSocket-only approach)');
+
     const service = getCoinListService();
-    service.clearCache();
-    
+    service.clearCurrentCoinList();
+
     const limit = parseInt(req.query.limit as string) || 50;
     const freshCoinList = await service.getCoinList(limit);
-    
+
     res.status(200).json({
       success: true,
-      message: 'Coin list cache refreshed successfully',
       data: freshCoinList,
       count: freshCoinList.length,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      message: 'Coin list refreshed using real-time WebSocket data'
     });
-    
+
   } catch (error) {
     logError('Error in refreshCoinList controller', error as Error);
     res.status(500).json({
@@ -253,7 +254,7 @@ export const resetCoinListPerformance = async (req: Request, res: Response): Pro
 // Cleanup function for graceful shutdown
 export const cleanupCoinListService = () => {
   if (coinListService) {
-    coinListService.stopBackgroundUpdates();
+    coinListService.stopRealTimeUpdates();
     coinListService = null;
   }
 };

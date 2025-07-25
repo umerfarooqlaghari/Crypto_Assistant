@@ -40,11 +40,241 @@ export class BinanceService {
   private baseURL = 'https://api.binance.com/api/v3';
   private wsBaseURL = 'wss://stream.binance.com:9443/ws';
   private wsConnections: Map<string, WebSocket> = new Map();
-  private priceCache: Map<string, BinanceTicker> = new Map();
+  private allTickersCache: Map<string, BinanceTicker> = new Map();
   private subscribers: Map<string, Set<(data: any) => void>> = new Map();
+  private isAllTickersConnected = false;
+  private allTickersSubscribers: Set<(tickers: BinanceTicker[]) => void> = new Set();
+
+  // Kline data caching for WebSocket streams
+  private klineCache: Map<string, number[][]> = new Map(); // key: symbol_timeframe, value: OHLCV array
+  private klineSubscribers: Map<string, Set<(ohlcv: number[][]) => void>> = new Map();
+  private klineConnections: Map<string, WebSocket> = new Map();
+  private readonly MAX_KLINE_BUFFER = 200; // Keep 200 candles in buffer
+
+  // Track API usage statistics
+  private cacheHits = 0;
+  private restApiCalls = 0; // Track REST API calls for monitoring
 
   constructor() {
-    this.initializePriceStreams();
+    this.initializeAllTickersStream();
+  }
+
+  // Subscribe to kline data for a specific symbol and timeframe
+  async subscribeToKlineData(symbol: string, timeframe: string): Promise<void> {
+    const key = `${symbol}_${timeframe}`;
+
+    // Don't create duplicate connections
+    if (this.klineConnections.has(key)) {
+      logDebug(`Already subscribed to kline data for ${symbol} ${timeframe}`);
+      return;
+    }
+
+    try {
+      // First, get initial historical data via REST API (one-time only)
+      await this.initializeKlineBuffer(symbol, timeframe);
+
+      // Then start WebSocket stream for real-time updates
+      this.startKlineWebSocketStream(symbol, timeframe);
+
+      logInfo(`Successfully subscribed to kline data for ${symbol} ${timeframe}`);
+    } catch (error) {
+      logError(`Failed to subscribe to kline data for ${symbol} ${timeframe}`, error as Error);
+      throw error;
+    }
+  }
+
+  // Initialize kline buffer with historical data (one-time REST API call)
+  private async initializeKlineBuffer(symbol: string, timeframe: string): Promise<void> {
+    const key = `${symbol}_${timeframe}`;
+
+    try {
+      logDebug(`Initializing kline buffer for ${symbol} ${timeframe}`);
+
+      // Get historical data via REST API (one-time only)
+      const interval = this.convertTimeframeToInterval(timeframe);
+      const klines = await this.getKlines(symbol, interval, this.MAX_KLINE_BUFFER);
+
+      // Convert to OHLCV format
+      const ohlcv = klines.map(kline => [
+        kline.openTime,
+        parseFloat(kline.open),
+        parseFloat(kline.high),
+        parseFloat(kline.low),
+        parseFloat(kline.close),
+        parseFloat(kline.volume)
+      ]);
+
+      // Store in cache
+      this.klineCache.set(key, ohlcv);
+
+      logDebug(`Initialized kline buffer for ${symbol} ${timeframe} with ${ohlcv.length} candles`);
+    } catch (error) {
+      logError(`Failed to initialize kline buffer for ${symbol} ${timeframe}`, error as Error);
+      throw error;
+    }
+  }
+
+  // Start WebSocket stream for real-time kline updates
+  private startKlineWebSocketStream(symbol: string, timeframe: string): void {
+    const key = `${symbol}_${timeframe}`;
+    const interval = this.convertTimeframeToInterval(timeframe);
+    const wsUrl = `${this.wsBaseURL}/${symbol.toLowerCase()}@kline_${interval}`;
+
+    const ws = new WebSocket(wsUrl);
+
+    ws.on('open', () => {
+      logDebug(`Connected to kline WebSocket for ${symbol} ${timeframe}`);
+    });
+
+    ws.on('message', (data: WebSocket.Data) => {
+      try {
+        const message = JSON.parse(data.toString());
+        this.handleKlineUpdate(symbol, timeframe, message);
+      } catch (error) {
+        logError(`Error parsing kline WebSocket message for ${symbol} ${timeframe}`, error as Error);
+      }
+    });
+
+    ws.on('error', (error) => {
+      logError(`Kline WebSocket error for ${symbol} ${timeframe}`, error);
+    });
+
+    ws.on('close', () => {
+      logInfo(`Kline WebSocket connection closed for ${symbol} ${timeframe}, attempting to reconnect...`);
+      this.klineConnections.delete(key);
+
+      // Reconnect after 5 seconds
+      setTimeout(() => {
+        if (!this.klineConnections.has(key)) {
+          this.startKlineWebSocketStream(symbol, timeframe);
+        }
+      }, 5000);
+    });
+
+    this.klineConnections.set(key, ws);
+  }
+
+  // Handle incoming kline updates from WebSocket
+  private handleKlineUpdate(symbol: string, timeframe: string, message: any): void {
+    const key = `${symbol}_${timeframe}`;
+    const klineData = message.k;
+
+    if (!klineData) {
+      logError(`Invalid kline data received for ${symbol} ${timeframe}`, new Error('Missing kline data'));
+      return;
+    }
+
+    // Get current buffer
+    const currentBuffer = this.klineCache.get(key) || [];
+
+    // Create new OHLCV candle
+    const newCandle = [
+      klineData.t, // open time
+      parseFloat(klineData.o), // open
+      parseFloat(klineData.h), // high
+      parseFloat(klineData.l), // low
+      parseFloat(klineData.c), // close
+      parseFloat(klineData.v)  // volume
+    ];
+
+    // Update buffer
+    let updatedBuffer = [...currentBuffer];
+
+    if (klineData.x) {
+      // Kline is closed - add new candle and maintain buffer size
+      updatedBuffer.push(newCandle);
+
+      // Keep only the last MAX_KLINE_BUFFER candles
+      if (updatedBuffer.length > this.MAX_KLINE_BUFFER) {
+        updatedBuffer = updatedBuffer.slice(-this.MAX_KLINE_BUFFER);
+      }
+    } else {
+      // Kline is still open - update the last candle
+      if (updatedBuffer.length > 0) {
+        updatedBuffer[updatedBuffer.length - 1] = newCandle;
+      } else {
+        updatedBuffer.push(newCandle);
+      }
+    }
+
+    // Update cache
+    this.klineCache.set(key, updatedBuffer);
+
+    // Notify subscribers
+    this.notifyKlineSubscribers(key, updatedBuffer);
+
+    logDebug(`Updated kline data for ${symbol} ${timeframe}, buffer size: ${updatedBuffer.length}, closed: ${klineData.x}`);
+  }
+
+  // Get cached OHLCV data (replaces REST API calls)
+  getCachedOHLCV(symbol: string, timeframe: string, limit: number = 100): number[][] {
+    const key = `${symbol}_${timeframe}`;
+    const cached = this.klineCache.get(key) || [];
+
+    // Return the last 'limit' candles
+    return cached.slice(-limit);
+  }
+
+  // Check if kline data is available for a symbol/timeframe
+  hasKlineData(symbol: string, timeframe: string): boolean {
+    const key = `${symbol}_${timeframe}`;
+    const cached = this.klineCache.get(key) || [];
+    return cached.length >= 50; // Minimum required for technical analysis
+  }
+
+  // Subscribe to kline data updates
+  subscribeToKlineUpdates(symbol: string, timeframe: string, callback: (ohlcv: number[][]) => void): void {
+    const key = `${symbol}_${timeframe}`;
+
+    if (!this.klineSubscribers.has(key)) {
+      this.klineSubscribers.set(key, new Set());
+    }
+
+    this.klineSubscribers.get(key)!.add(callback);
+
+    // Send current data if available
+    const cached = this.klineCache.get(key);
+    if (cached && cached.length > 0) {
+      callback(cached);
+    }
+  }
+
+  // Unsubscribe from kline data updates
+  unsubscribeFromKlineUpdates(symbol: string, timeframe: string, callback: (ohlcv: number[][]) => void): void {
+    const key = `${symbol}_${timeframe}`;
+    const subscribers = this.klineSubscribers.get(key);
+
+    if (subscribers) {
+      subscribers.delete(callback);
+
+      // Clean up if no more subscribers
+      if (subscribers.size === 0) {
+        this.klineSubscribers.delete(key);
+
+        // Optionally close WebSocket connection if no subscribers
+        const ws = this.klineConnections.get(key);
+        if (ws) {
+          ws.close();
+          this.klineConnections.delete(key);
+          this.klineCache.delete(key);
+          logDebug(`Closed kline WebSocket for ${symbol} ${timeframe} - no more subscribers`);
+        }
+      }
+    }
+  }
+
+  // Notify kline subscribers
+  private notifyKlineSubscribers(key: string, ohlcv: number[][]): void {
+    const subscribers = this.klineSubscribers.get(key);
+    if (subscribers) {
+      subscribers.forEach(callback => {
+        try {
+          callback(ohlcv);
+        } catch (error) {
+          logError(`Error notifying kline subscriber for ${key}`, error as Error);
+        }
+      });
+    }
   }
 
   // Get all trading symbols from Binance
@@ -94,7 +324,7 @@ export class BinanceService {
   async getCurrentPrice(symbol: string): Promise<number> {
     try {
       // Use WebSocket cache only - no REST API fallback
-      const cached = this.priceCache.get(symbol);
+      const cached = this.allTickersCache.get(symbol);
       if (cached) {
         return parseFloat(cached.price);
       }
@@ -126,7 +356,7 @@ export class BinanceService {
       };
 
       // Update cache
-      this.priceCache.set(symbol, ticker);
+      this.allTickersCache.set(symbol, ticker);
 
       return ticker;
     } catch (error) {
@@ -135,44 +365,42 @@ export class BinanceService {
     }
   }
 
-  // Get all 24hr ticker statistics in bulk (more efficient for coin list)
-  async getAllTickers24hr(): Promise<BinanceTicker[]> {
-    try {
-      logDebug('Fetching all 24hr tickers from Binance');
+  // Get all tickers from WebSocket cache (replaces REST API call)
+  getAllTickersFromCache(): BinanceTicker[] {
+    const tickers = Array.from(this.allTickersCache.values())
+      .filter(ticker =>
+        ticker.symbol.endsWith('USDT') &&
+        !ticker.symbol.includes('UP') &&
+        !ticker.symbol.includes('DOWN') &&
+        !ticker.symbol.includes('BULL') &&
+        !ticker.symbol.includes('BEAR')
+      )
+      .sort((a: BinanceTicker, b: BinanceTicker) =>
+        parseFloat(b.volume) - parseFloat(a.volume)
+      );
 
-      const response = await axios.get(`${this.baseURL}/ticker/24hr`);
+    logDebug(`Retrieved ${tickers.length} tickers from WebSocket cache`);
+    return tickers;
+  }
 
-      const tickers: BinanceTicker[] = response.data
-        .filter((ticker: any) =>
-          ticker.symbol.endsWith('USDT') &&
-          !ticker.symbol.includes('UP') &&
-          !ticker.symbol.includes('DOWN') &&
-          !ticker.symbol.includes('BULL') &&
-          !ticker.symbol.includes('BEAR')
-        )
-        .map((ticker: any) => ({
-          symbol: ticker.symbol,
-          price: ticker.lastPrice,
-          priceChangePercent: ticker.priceChangePercent,
-          volume: ticker.volume,
-          high: ticker.highPrice,
-          low: ticker.lowPrice
-        }))
-        .sort((a: BinanceTicker, b: BinanceTicker) =>
-          parseFloat(b.volume) - parseFloat(a.volume)
-        );
+  // Check if WebSocket data is ready
+  isWebSocketDataReady(): boolean {
+    return this.isAllTickersConnected && this.allTickersCache.size > 0;
+  }
 
-      // Update cache for all tickers
-      tickers.forEach(ticker => {
-        this.priceCache.set(ticker.symbol, ticker);
-      });
+  // Subscribe to all tickers updates
+  subscribeToAllTickers(callback: (tickers: BinanceTicker[]) => void) {
+    this.allTickersSubscribers.add(callback);
 
-      logInfo(`Fetched ${tickers.length} 24hr tickers from Binance`);
-      return tickers;
-    } catch (error) {
-      logError('Error fetching all 24hr tickers', error as Error);
-      throw error;
+    // Send current data if available
+    if (this.isWebSocketDataReady()) {
+      callback(this.getAllTickersFromCache());
     }
+  }
+
+  // Unsubscribe from all tickers updates
+  unsubscribeFromAllTickers(callback: (tickers: BinanceTicker[]) => void) {
+    this.allTickersSubscribers.delete(callback);
   }
 
   // Get historical klines/candlestick data with retry logic
@@ -238,16 +466,38 @@ export class BinanceService {
     return mapping[timeframe] || '1h';
   }
 
-  // Get OHLCV data in standard format
+  // Get OHLCV data - now uses WebSocket cache instead of REST API
   async getOHLCV(
     symbol: string,
     timeframe: string,
     limit: number = 100
   ): Promise<number[][]> {
     try {
+      // First try to get from WebSocket cache
+      if (this.hasKlineData(symbol, timeframe)) {
+        const cachedData = this.getCachedOHLCV(symbol, timeframe, limit);
+        this.cacheHits++;
+        logDebug(`✅ Retrieved ${cachedData.length} OHLCV candles from WebSocket cache for ${symbol} ${timeframe} - NO REST API CALL! (Cache hits: ${this.cacheHits})`);
+        return cachedData;
+      }
+
+      // If not in cache, subscribe to WebSocket and get initial data
+      logDebug(`No cached data for ${symbol} ${timeframe}, initializing WebSocket subscription`);
+      await this.subscribeToKlineData(symbol, timeframe);
+
+      // Get the newly cached data
+      const cachedData = this.getCachedOHLCV(symbol, timeframe, limit);
+      if (cachedData.length > 0) {
+        logDebug(`Retrieved ${cachedData.length} OHLCV candles after WebSocket initialization for ${symbol} ${timeframe}`);
+        return cachedData;
+      }
+
+      // Fallback to REST API if WebSocket fails (should be rare)
+      this.restApiCalls++;
+      logError(`⚠️ WebSocket cache failed for ${symbol} ${timeframe}, falling back to REST API - THIS SHOULD BE RARE! (REST API calls: ${this.restApiCalls})`, new Error('WebSocket cache unavailable'));
       const interval = this.convertTimeframeToInterval(timeframe);
       const klines = await this.getKlines(symbol, interval, limit);
-      
+
       return klines.map(kline => [
         kline.openTime,
         parseFloat(kline.open),
@@ -262,70 +512,77 @@ export class BinanceService {
     }
   }
 
-  // Initialize WebSocket connections for real-time price updates
-  private initializePriceStreams() {
-    logInfo('Initializing Binance WebSocket price streams');
+  // Pre-subscribe to kline data for multiple symbols and timeframes (for coin list)
+  async preSubscribeToKlineData(symbols: string[], timeframes: string[]): Promise<void> {
+    logInfo(`Pre-subscribing to kline data for ${symbols.length} symbols and ${timeframes.length} timeframes`);
 
-    // Subscribe to ALL market tickers stream for comprehensive real-time data
-    this.subscribeToAllMarketTickers();
+    const subscriptionPromises: Promise<void>[] = [];
 
-    // We'll start with major pairs and add more as needed
-    const majorPairs = [
-      'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'ADAUSDT', 'SOLUSDT',
-      'XRPUSDT', 'DOTUSDT', 'AVAXUSDT', 'MATICUSDT', 'LINKUSDT'
-    ];
-
-    this.subscribeToMultipleTickers(majorPairs);
-  }
-
-  // Subscribe to real-time ticker updates for multiple symbols
-  private subscribeToMultipleTickers(symbols: string[]) {
-    const streams = symbols.map(symbol => `${symbol.toLowerCase()}@ticker`);
-    const wsUrl = `${this.wsBaseURL}/${streams.join('/')}`;
-
-    const ws = new WebSocket(wsUrl);
-
-    ws.on('open', () => {
-      logInfo(`Connected to Binance WebSocket for ${symbols.length} symbols`);
-    });
-
-    ws.on('message', (data: WebSocket.Data) => {
-      try {
-        const ticker = JSON.parse(data.toString());
-
-        if (ticker.stream && ticker.data) {
-          const symbol = ticker.data.s;
-          const tickerData: BinanceTicker = {
-            symbol,
-            price: ticker.data.c,
-            priceChangePercent: ticker.data.P,
-            volume: ticker.data.v,
-            high: ticker.data.h,
-            low: ticker.data.l
-          };
-
-          // Update cache
-          this.priceCache.set(symbol, tickerData);
-
-          // Notify subscribers
-          this.notifySubscribers(symbol, tickerData);
-        }
-      } catch (error) {
-        logError('Error parsing WebSocket message', error as Error);
+    for (const symbol of symbols) {
+      for (const timeframe of timeframes) {
+        subscriptionPromises.push(
+          this.subscribeToKlineData(symbol, timeframe).catch(error => {
+            logError(`Failed to pre-subscribe to ${symbol} ${timeframe}`, error as Error);
+          })
+        );
       }
-    });
+    }
 
-    ws.on('error', (error) => {
-      logError('Binance WebSocket error', error);
-    });
+    // Subscribe in batches to avoid overwhelming the system
+    const batchSize = 10;
+    for (let i = 0; i < subscriptionPromises.length; i += batchSize) {
+      const batch = subscriptionPromises.slice(i, i + batchSize);
+      await Promise.allSettled(batch);
 
-    ws.on('close', () => {
-      logInfo('Binance WebSocket connection closed, attempting to reconnect...');
-      setTimeout(() => this.subscribeToMultipleTickers(symbols), 5000);
-    });
+      // Small delay between batches to be respectful to Binance
+      if (i + batchSize < subscriptionPromises.length) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
 
-    this.wsConnections.set('main', ws);
+    logInfo(`Completed pre-subscription to kline data for ${symbols.length} symbols and ${timeframes.length} timeframes`);
   }
+
+  // Get statistics about cached kline data
+  getKlineCacheStats(): { totalStreams: number; totalCandles: number; symbols: string[] } {
+    const totalStreams = this.klineCache.size;
+    let totalCandles = 0;
+    const symbols = new Set<string>();
+
+    for (const [key, ohlcv] of this.klineCache.entries()) {
+      totalCandles += ohlcv.length;
+      const symbol = key.split('_')[0];
+      symbols.add(symbol);
+    }
+
+    return {
+      totalStreams,
+      totalCandles,
+      symbols: Array.from(symbols)
+    };
+  }
+
+  // Get API usage statistics
+  getApiUsageStats(): { cacheHits: number; restApiCalls: number; cacheHitRate: number } {
+    const total = this.cacheHits + this.restApiCalls;
+    const cacheHitRate = total > 0 ? (this.cacheHits / total) * 100 : 0;
+
+    return {
+      cacheHits: this.cacheHits,
+      restApiCalls: this.restApiCalls,
+      cacheHitRate: Math.round(cacheHitRate * 100) / 100 // Round to 2 decimal places
+    };
+  }
+
+  // Initialize WebSocket connection for ALL market tickers (WebSocket-only approach)
+  private initializeAllTickersStream() {
+    logInfo('Initializing Binance WebSocket ALL market tickers stream (WebSocket-only approach)');
+
+    // Subscribe to ALL market tickers stream - this replaces all REST API calls
+    this.subscribeToAllMarketTickers();
+  }
+
+
 
   // Subscribe to ALL market tickers stream (replaces REST API calls)
   private subscribeToAllMarketTickers() {
@@ -334,6 +591,7 @@ export class BinanceService {
 
     ws.on('open', () => {
       logInfo('Connected to Binance ALL market tickers WebSocket stream');
+      this.isAllTickersConnected = true;
     });
 
     ws.on('message', (data: WebSocket.Data) => {
@@ -342,6 +600,8 @@ export class BinanceService {
 
         // Process each ticker in the array
         if (Array.isArray(tickers)) {
+          const filteredTickers: BinanceTicker[] = [];
+
           tickers.forEach((ticker: any) => {
             // Filter for USDT pairs and exclude leveraged tokens
             if (ticker.s.endsWith('USDT') &&
@@ -360,14 +620,24 @@ export class BinanceService {
               };
 
               // Update cache
-              this.priceCache.set(ticker.s, tickerData);
+              this.allTickersCache.set(ticker.s, tickerData);
+              filteredTickers.push(tickerData);
 
-              // Notify subscribers
+              // Notify individual symbol subscribers
               this.notifySubscribers(ticker.s, tickerData);
             }
           });
 
-          logDebug(`Processed ${tickers.length} ticker updates from all market stream`);
+          // Notify all tickers subscribers with filtered data
+          this.allTickersSubscribers.forEach(callback => {
+            try {
+              callback(filteredTickers);
+            } catch (error) {
+              logError('Error in all tickers callback', error as Error);
+            }
+          });
+
+          logDebug(`Processed ${filteredTickers.length} USDT ticker updates from all market stream`);
         }
       } catch (error) {
         logError('Error parsing all market tickers WebSocket message', error as Error);
@@ -376,10 +646,12 @@ export class BinanceService {
 
     ws.on('error', (error) => {
       logError('Binance all market tickers WebSocket error', error);
+      this.isAllTickersConnected = false;
     });
 
     ws.on('close', () => {
       logInfo('Binance all market tickers WebSocket connection closed, attempting to reconnect...');
+      this.isAllTickersConnected = false;
       setTimeout(() => this.subscribeToAllMarketTickers(), 5000);
     });
 
@@ -417,7 +689,7 @@ export class BinanceService {
         };
 
         // Update cache
-        this.priceCache.set(symbol, tickerData);
+        this.allTickersCache.set(symbol, tickerData);
 
         // Notify subscribers
         this.notifySubscribers(symbol, tickerData);
@@ -449,7 +721,7 @@ export class BinanceService {
     this.subscribers.get(symbol)!.add(callback);
 
     // Send current cached data if available (WebSocket cache-first approach)
-    const cached = this.priceCache.get(symbol);
+    const cached = this.allTickersCache.get(symbol);
     if (cached) {
       callback(cached);
     } else {
@@ -486,7 +758,7 @@ export class BinanceService {
 
   // Get cached price data
   getCachedPrice(symbol: string): BinanceTicker | null {
-    return this.priceCache.get(symbol) || null;
+    return this.allTickersCache.get(symbol) || null;
   }
 
   // Close all WebSocket connections

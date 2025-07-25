@@ -41,9 +41,9 @@ router.get('/status', async (_req, res) => {
       data: {
         isActive: true,
         lastUpdate: stats.lastUpdate,
-        totalCoins: stats.apiCalls > 0 ? 50 : 0, // Estimate based on activity
-        backgroundUpdatesActive: true,
-        cacheSize: stats.cacheSize,
+        totalCoins: stats.activeCoinCount, // Real-time active coin count
+        realTimeUpdatesActive: true,
+        wsUpdates: stats.wsUpdates,
         uptime: stats.uptime,
         timestamp: Date.now()
       }

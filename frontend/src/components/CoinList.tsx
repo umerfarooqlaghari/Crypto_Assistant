@@ -58,6 +58,8 @@ export default function CoinList() {
   const [isConnected, setIsConnected] = useState(false);
   const [serviceStatus, setServiceStatus] = useState<{lastUpdate: number, isActive: boolean} | null>(null);
 
+
+
   const timeframes = [
     { key: '5m', label: '5m' },
     { key: '15m', label: '15m' },
@@ -66,6 +68,8 @@ export default function CoinList() {
     { key: '4h', label: '4h' },
     { key: '1d', label: '1d' }
   ] as const;
+
+
 
   // Check service status (this will show up in network tab)
   const checkServiceStatus = async () => {
@@ -152,7 +156,7 @@ export default function CoinList() {
       setLastUpdate(new Date(data.timestamp));
     });
 
-    // Listen for individual coin price updates
+    // Listen for individual coin price updates (real-time WebSocket updates)
     newSocket.on('coinPriceUpdate', (data: { symbol: string, price: number, priceChange24h: number, volume: number, timestamp: number }) => {
       console.log('🔄 Real-time price update:', data.symbol, '$' + data.price.toFixed(6), data.priceChange24h.toFixed(2) + '%');
 
@@ -166,9 +170,9 @@ export default function CoinList() {
       setLastUpdate(new Date(data.timestamp));
     });
 
-    // Listen for individual coin confidence updates from smart queue
+    // Listen for individual coin confidence updates (real-time confidence calculations)
     newSocket.on('coinConfidenceUpdate', (data: { symbol: string, confidence: any, lastUpdated: number, timestamp: number }) => {
-      console.log('🎯 Smart queue confidence update:', data.symbol, 'confidence updated');
+      console.log('🎯 Real-time confidence update:', data.symbol, 'confidence updated');
 
       setCoins(prevCoins =>
         prevCoins.map(coin =>
@@ -331,11 +335,15 @@ export default function CoinList() {
           </h1>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-400' : 'bg-red-400'}`} />
-                <span className="text-sm text-gray-300">
-                  {isConnected ? 'Live Updates' : 'Disconnected'}
-                </span>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-400' : 'bg-red-400'}`} />
+                  <span className="text-sm text-gray-300">
+                    {isConnected ? 'WebSocket Connected' : 'Disconnected'}
+                  </span>
+                </div>
+
+
               </div>
             </div>
 
@@ -363,7 +371,7 @@ export default function CoinList() {
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg transition-colors"
             >
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-              {refreshing ? 'Refreshing...' : 'Refresh'}
+              {refreshing ? 'Refreshing WebSocket Data...' : 'Refresh from WebSocket'}
             </button>
           </div>
         </div>
@@ -445,7 +453,10 @@ export default function CoinList() {
             </thead>
             <tbody className="divide-y divide-gray-700/50">
               {filteredCoins.map((coin) => (
-                <tr key={coin.symbol} className="hover:bg-gray-800/30 transition-colors">
+                <tr
+                  key={coin.symbol}
+                  className="hover:bg-gray-800/30 transition-colors"
+                >
                   <td className="px-6 py-4">
                     <div>
                       <div className="font-medium text-white">{coin.name}</div>
