@@ -12,6 +12,7 @@ interface NotificationRule {
   minConfidence?: number;
   minStrength?: number;
   requiredTimeframes?: number;
+  specificTimeframes?: string[];
   requiredSignalType?: 'BUY' | 'SELL' | 'HOLD';
   advancedConditions?: any;
   enableSound: boolean;
@@ -28,6 +29,7 @@ interface RuleFormData {
   minConfidence: string;
   minStrength: string;
   requiredTimeframes: string;
+  specificTimeframes: string[];
   requiredSignalType: string;
   enableSound: boolean;
   enableVisual: boolean;
@@ -41,11 +43,21 @@ const initialFormData: RuleFormData = {
   minConfidence: '',
   minStrength: '',
   requiredTimeframes: '',
+  specificTimeframes: [],
   requiredSignalType: '',
   enableSound: true,
   enableVisual: true,
   priority: 'MEDIUM'
 };
+
+const AVAILABLE_TIMEFRAMES = [
+  { value: '1m', label: '1 Minute' },
+  { value: '5m', label: '5 Minutes' },
+  { value: '15m', label: '15 Minutes' },
+  { value: '1h', label: '1 Hour' },
+  { value: '4h', label: '4 Hours' },
+  { value: '1d', label: '1 Day' }
+];
 
 export default function NotificationRules() {
   const [rules, setRules] = useState<NotificationRule[]>([]);
@@ -96,6 +108,7 @@ export default function NotificationRules() {
         minConfidence: formData.minConfidence ? parseFloat(formData.minConfidence) : undefined,
         minStrength: formData.minStrength ? parseFloat(formData.minStrength) : undefined,
         requiredTimeframes: formData.requiredTimeframes ? parseInt(formData.requiredTimeframes) : undefined,
+        specificTimeframes: formData.specificTimeframes.length > 0 ? formData.specificTimeframes : undefined,
         requiredSignalType: formData.requiredSignalType || undefined,
         enableSound: formData.enableSound,
         enableVisual: formData.enableVisual,
@@ -146,12 +159,40 @@ export default function NotificationRules() {
       minConfidence: rule.minConfidence?.toString() || '',
       minStrength: rule.minStrength?.toString() || '',
       requiredTimeframes: rule.requiredTimeframes?.toString() || '',
+      specificTimeframes: rule.specificTimeframes || [],
       requiredSignalType: rule.requiredSignalType || '',
       enableSound: rule.enableSound,
       enableVisual: rule.enableVisual,
       priority: rule.priority
     });
     setShowForm(true);
+  };
+
+  // Helper functions for timeframe management
+  const addTimeframeSlot = () => {
+    setFormData(prev => ({
+      ...prev,
+      specificTimeframes: [...prev.specificTimeframes, '']
+    }));
+  };
+
+  const removeTimeframeSlot = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      specificTimeframes: prev.specificTimeframes.filter((_, i) => i !== index)
+    }));
+  };
+
+  const updateTimeframeSlot = (index: number, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      specificTimeframes: prev.specificTimeframes.map((tf, i) => i === index ? value : tf)
+    }));
+  };
+
+  const getAvailableTimeframes = (currentIndex: number) => {
+    const selectedTimeframes = formData.specificTimeframes.filter((tf, i) => i !== currentIndex && tf !== '');
+    return AVAILABLE_TIMEFRAMES.filter(tf => !selectedTimeframes.includes(tf.value));
   };
 
   const handleDelete = async (rule: NotificationRule) => {
@@ -307,16 +348,42 @@ export default function NotificationRules() {
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-800 mb-2">
-                  Required Timeframes
+                  Specific Timeframes
                 </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="10"
-                  value={formData.requiredTimeframes}
-                  onChange={(e) => setFormData(prev => ({ ...prev, requiredTimeframes: e.target.value }))}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 font-medium"
-                />
+                <div className="space-y-3">
+                  {formData.specificTimeframes.map((timeframe, index) => (
+                    <div key={index} className="flex items-center space-x-2">
+                      <select
+                        value={timeframe}
+                        onChange={(e) => updateTimeframeSlot(index, e.target.value)}
+                        className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 font-medium"
+                      >
+                        <option value="">Select Timeframe</option>
+                        {getAvailableTimeframes(index).map((tf) => (
+                          <option key={tf.value} value={tf.value}>
+                            {tf.label}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => removeTimeframeSlot(index)}
+                        className="px-3 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={addTimeframeSlot}
+                    disabled={formData.specificTimeframes.length >= AVAILABLE_TIMEFRAMES.length}
+                    className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span>Add Timeframe</span>
+                  </button>
+                </div>
               </div>
             </div>
 

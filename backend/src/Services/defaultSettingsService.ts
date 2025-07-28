@@ -66,7 +66,7 @@ export class DefaultSettingsService {
     },
     {
       key: 'enabled_timeframes',
-      value: '["5m", "15m", "30m", "1h", "4h"]',
+      value: '["1m", "5m", "15m", "1h", "4h"]',
       type: 'json',
       description: 'List of enabled timeframes for analysis',
       category: 'timeframe'

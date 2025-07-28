@@ -19,12 +19,10 @@ export interface TechnicalIndicators {
     ema12: number;
     ema26: number;
   };
-  stochastic: {
-    k: number;
-    d: number;
-  };
   atr: number;
   volume: number;
+  // Allow index access for dynamic property access
+  [key: string]: any;
 }
 
 export interface CandleData {
@@ -129,22 +127,7 @@ export class TechnicalIndicatorService {
     };
   }
 
-  // Calculate Stochastic Oscillator
-  private calculateStochastic(candles: CandleData[], period: number = 14): { k: number; d: number } {
-    if (candles.length < period) return { k: 50, d: 50 };
 
-    const recentCandles = candles.slice(-period);
-    const currentClose = candles[candles.length - 1].close;
-    const lowestLow = Math.min(...recentCandles.map(c => c.low));
-    const highestHigh = Math.max(...recentCandles.map(c => c.high));
-
-    const k = ((currentClose - lowestLow) / (highestHigh - lowestLow)) * 100;
-    
-    // Simplified D calculation (normally would use SMA of K values)
-    const d = k; // In practice, this would be SMA of last 3 K values
-
-    return { k, d };
-  }
 
   // Calculate Average True Range (ATR)
   private calculateATR(candles: CandleData[], period: number = 14): number {
@@ -186,7 +169,6 @@ export class TechnicalIndicatorService {
       const rsi = this.calculateRSI(closePrices);
       const macd = this.calculateMACD(closePrices);
       const bollingerBands = this.calculateBollingerBands(closePrices);
-      const stochastic = this.calculateStochastic(candles);
       const atr = this.calculateATR(candles);
 
       const movingAverages = {
@@ -203,7 +185,6 @@ export class TechnicalIndicatorService {
         macd,
         bollingerBands,
         movingAverages,
-        stochastic,
         atr,
         volume: currentCandle.volume,
       };

@@ -23,10 +23,23 @@ interface DetailedNotification {
   createdAt: string;
   isRead: boolean;
   readAt?: string;
+  // Technical analysis data stored directly in notification
+  technicalIndicators?: any;
+  chartPatterns?: any[];
+  candlestickPatterns?: any[];
+  triggeredTimeframes?: string[];
+  analysisReasoning?: string[];
+  currentPrice?: number;
+  exchange?: string;
   rule?: {
     id: string;
     name: string;
     description?: string;
+    minConfidence?: number;
+    minStrength?: number;
+    requiredTimeframes?: number;
+    requiredSignalType?: string;
+    specificTimeframes?: string[];
   };
   signalData?: {
     id: string;
@@ -44,7 +57,113 @@ interface DetailedNotification {
     generatedAt: string;
     processingTimeMs?: number;
   };
+  multiTimeframeData?: Array<{
+    timeframe: string;
+    signalData: {
+      id: string;
+      symbol: string;
+      exchange: string;
+      timeframe: string;
+      signal: string;
+      confidence: number;
+      strength: number;
+      currentPrice: number;
+      technicalIndicators?: any;
+      chartPatterns?: any[];
+      candlestickPatterns?: any[];
+      reasoning?: string[];
+      generatedAt: string;
+      processingTimeMs?: number;
+    };
+  }>;
 }
+
+// Helper function to render progress bar
+const ProgressBar = ({ value, label, color = 'blue' }: { value: number; label: string; color?: string }) => {
+  const colorClasses = {
+    blue: 'bg-blue-500',
+    green: 'bg-green-500',
+    red: 'bg-red-500',
+    yellow: 'bg-yellow-500'
+  };
+
+  return (
+    <div className="mb-3">
+      <div className="flex justify-between text-sm mb-1">
+        <span className="text-gray-300">{label}</span>
+        <span className="text-white font-medium">{value.toFixed(1)}%</span>
+      </div>
+      <div className="w-full bg-gray-700 rounded-full h-2">
+        <div
+          className={`h-2 rounded-full ${colorClasses[color as keyof typeof colorClasses] || colorClasses.blue}`}
+          style={{ width: `${Math.min(Math.max(value, 0), 100)}%` }}
+        ></div>
+      </div>
+    </div>
+  );
+};
+
+// Helper function to format technical indicator value
+const formatIndicatorValue = (key: string, value: any): string => {
+  if (typeof value === 'number') {
+    return value.toFixed(2);
+  }
+  if (typeof value === 'object' && value !== null) {
+    // Handle specific indicator objects
+    if (key.toLowerCase().includes('macd') && value.histogram !== undefined) {
+      return `${value.histogram > 0 ? 'Bullish' : 'Bearish'} (${value.histogram.toFixed(2)})`;
+    }
+    if (key.toLowerCase().includes('rsi')) {
+      const rsiValue = value.value || value.rsi || value;
+      if (typeof rsiValue === 'number') {
+        if (rsiValue > 70) return `Overbought (${rsiValue.toFixed(1)})`;
+        if (rsiValue < 30) return `Oversold (${rsiValue.toFixed(1)})`;
+        return `Neutral (${rsiValue.toFixed(1)})`;
+      }
+    }
+    if (key.toLowerCase().includes('bollinger')) {
+      return value.position || 'N/A';
+    }
+    if (key.toLowerCase().includes('movingaverages') && value.ema12 !== undefined && value.ema26 !== undefined) {
+      const trend = value.ema12 > value.ema26 ? 'Bullish' : value.ema12 < value.ema26 ? 'Bearish' : 'Neutral';
+      return `${trend} (EMA12: ${value.ema12.toFixed(2)}, EMA26: ${value.ema26.toFixed(2)})`;
+    }
+    return JSON.stringify(value);
+  }
+  return String(value);
+};
+
+// Helper function to get indicator signal
+const getIndicatorSignal = (key: string, value: any): 'Bullish' | 'Bearish' | 'Neutral' => {
+  if (typeof value === 'object' && value !== null) {
+    if (key.toLowerCase().includes('macd') && value.histogram !== undefined) {
+      return value.histogram > 0 ? 'Bullish' : 'Bearish';
+    }
+    if (key.toLowerCase().includes('rsi')) {
+      const rsiValue = value.value || value.rsi || value;
+      if (typeof rsiValue === 'number') {
+        if (rsiValue > 70) return 'Bearish';
+        if (rsiValue < 30) return 'Bullish';
+        return 'Neutral';
+      }
+    }
+    if (key.toLowerCase().includes('ema') && value.trend) {
+      return value.trend === 'up' ? 'Bullish' : value.trend === 'down' ? 'Bearish' : 'Neutral';
+    }
+    if (key.toLowerCase().includes('movingaverages') && value.ema12 !== undefined && value.ema26 !== undefined) {
+      // Calculate EMA trend: EMA12 > EMA26 = Bullish, EMA12 < EMA26 = Bearish
+      if (value.ema12 > value.ema26) return 'Bullish';
+      if (value.ema12 < value.ema26) return 'Bearish';
+      return 'Neutral';
+    }
+    if (key.toLowerCase().includes('bollinger') && value.position) {
+      if (value.position.includes('above')) return 'Bullish';
+      if (value.position.includes('below')) return 'Bearish';
+      return 'Neutral';
+    }
+  }
+  return 'Neutral';
+};
 
 export default function NotificationDetailPage() {
   const params = useParams();
@@ -275,56 +394,198 @@ export default function NotificationDetailPage() {
           </div>
         </div>
 
-        {/* Signal Details */}
-        {notification.signalData && (
+        {/* Technical Analysis Section */}
+        {notification.timeframe === 'multi' && notification.triggeredTimeframes ? (
           <div className="bg-gray-800 rounded-lg p-6 mb-6">
-            <h3 className="text-xl font-semibold mb-4">Signal Analysis Details</h3>
-            
+            <h3 className="text-xl font-semibold mb-4">Multi-Timeframe Technical Analysis</h3>
+            <p className="text-gray-300 mb-6">
+              This notification was triggered across {notification.triggeredTimeframes.length} timeframes: {' '}
+              <span className="font-medium text-blue-400">
+                {notification.triggeredTimeframes.join(', ')}
+              </span>
+            </p>
+
+            {/* Timeframe Analysis Boxes */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {notification.triggeredTimeframes.map((timeframe) => (
+                <div key={timeframe} className="bg-gray-700 rounded-lg p-5 border border-gray-600">
+                  {/* Timeframe Header */}
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-lg font-semibold text-blue-400">{timeframe}</h4>
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                      notification.signal === 'BUY' ? 'bg-green-500/20 text-green-400 border border-green-500/30' :
+                      notification.signal === 'SELL' ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
+                      'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                    }`}>
+                      {notification.signal}
+                    </span>
+                  </div>
+
+                  {/* Confidence and Strength Bars */}
+                  <div className="mb-4">
+                    <ProgressBar
+                      value={notification.confidence || 0}
+                      label="Confidence"
+                      color={(notification.confidence || 0) >= 70 ? 'green' : (notification.confidence || 0) >= 50 ? 'yellow' : 'red'}
+                    />
+                    <ProgressBar
+                      value={notification.strength || 0}
+                      label="Strength"
+                      color={(notification.strength || 0) >= 70 ? 'green' : (notification.strength || 0) >= 50 ? 'yellow' : 'red'}
+                    />
+                  </div>
+
+                  {/* Technical Indicators Summary */}
+                  {notification.technicalIndicators && notification.technicalIndicators[timeframe] && notification.technicalIndicators[timeframe].technicalIndicators && (
+                    <div className="mb-4">
+                      <h5 className="text-sm font-semibold text-gray-300 mb-2">Technical Indicators:</h5>
+                      <div className="space-y-1 text-sm">
+                        {Object.entries(notification.technicalIndicators[timeframe].technicalIndicators)
+                          .filter(([key]) => ['rsi', 'macd', 'ema', 'bollinger', 'movingaverages'].some(indicator =>
+                            key.toLowerCase().includes(indicator)
+                          ))
+                          .map(([key, value]) => {
+                            const signal = getIndicatorSignal(key, value);
+                            let displayName = key.replace(/([A-Z])/g, ' $1').trim().toUpperCase();
+
+                            // Special handling for moving averages to show as "EMA TREND"
+                            if (key.toLowerCase().includes('movingaverages')) {
+                              displayName = 'EMA TREND';
+                            }
+
+                            return (
+                              <div key={key} className="flex justify-between">
+                                <span className="text-gray-400">{displayName}:</span>
+                                <span className={`font-medium ${
+                                  signal === 'Bullish' ? 'text-green-400' :
+                                  signal === 'Bearish' ? 'text-red-400' : 'text-yellow-400'
+                                }`}>
+                                  {signal}
+                                </span>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Chart and Candlestick Patterns */}
+                  <div className="text-sm">
+                    {notification.technicalIndicators && notification.technicalIndicators[timeframe] && notification.technicalIndicators[timeframe].chartPatterns && notification.technicalIndicators[timeframe].chartPatterns.length > 0 && (
+                      <div className="mb-2">
+                        <span className="text-gray-400">Chart Patterns: </span>
+                        <span className="text-blue-400">
+                          {notification.technicalIndicators[timeframe].chartPatterns
+                            .map((p: any) => p.name || p.type || 'Pattern').join(', ')}
+                        </span>
+                      </div>
+                    )}
+                    {notification.technicalIndicators && notification.technicalIndicators[timeframe] && notification.technicalIndicators[timeframe].candlestickPatterns && notification.technicalIndicators[timeframe].candlestickPatterns.length > 0 && (
+                      <div>
+                        <span className="text-gray-400">Candlestick Patterns: </span>
+                        <span className="text-orange-400">
+                          {notification.technicalIndicators[timeframe].candlestickPatterns
+                            .map((p: any) => p.name || p.type || 'Pattern').join(', ')}
+                        </span>
+                      </div>
+                    )}
+                    {/* Show "No patterns detected" if no patterns are found */}
+                    {notification.technicalIndicators && notification.technicalIndicators[timeframe] &&
+                     (!notification.technicalIndicators[timeframe].chartPatterns || notification.technicalIndicators[timeframe].chartPatterns.length === 0) &&
+                     (!notification.technicalIndicators[timeframe].candlestickPatterns || notification.technicalIndicators[timeframe].candlestickPatterns.length === 0) && (
+                      <div className="text-gray-500 text-xs">
+                        No chart or candlestick patterns detected
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (notification.technicalIndicators || notification.chartPatterns || notification.candlestickPatterns) ? (
+          <div className="bg-gray-800 rounded-lg p-6 mb-6">
+            <h3 className="text-xl font-semibold mb-4">Technical Analysis Summary</h3>
+
             {/* Basic Signal Info */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
               <div className="bg-gray-700 rounded-lg p-4">
                 <div className="text-sm text-gray-400">Exchange</div>
-                <div className="text-lg font-semibold">{notification.signalData.exchange}</div>
+                <div className="text-lg font-semibold">{notification.exchange || 'binance'}</div>
               </div>
+              {notification.currentPrice && (
+                <div className="bg-gray-700 rounded-lg p-4">
+                  <div className="text-sm text-gray-400">Current Price</div>
+                  <div className="text-lg font-semibold">${notification.currentPrice.toFixed(2)}</div>
+                </div>
+              )}
               <div className="bg-gray-700 rounded-lg p-4">
-                <div className="text-sm text-gray-400">Current Price</div>
-                <div className="text-lg font-semibold">${notification.signalData.currentPrice.toFixed(2)}</div>
-              </div>
-              <div className="bg-gray-700 rounded-lg p-4">
-                <div className="text-sm text-gray-400">Processing Time</div>
-                <div className="text-lg font-semibold">{notification.signalData.processingTimeMs || 0}ms</div>
+                <div className="text-sm text-gray-400">Timeframe</div>
+                <div className="text-lg font-semibold">{notification.timeframe || 'N/A'}</div>
               </div>
               <div className="bg-gray-700 rounded-lg p-4">
                 <div className="text-sm text-gray-400">Generated At</div>
-                <div className="text-lg font-semibold">{new Date(notification.signalData.generatedAt).toLocaleTimeString()}</div>
+                <div className="text-lg font-semibold">{new Date(notification.createdAt).toLocaleTimeString()}</div>
               </div>
             </div>
 
-            {/* Technical Indicators */}
-            {notification.signalData.technicalIndicators && (
+            {/* Confidence and Strength Bars */}
+            <div className="mb-6 max-w-md">
+              <ProgressBar
+                value={notification.confidence || 0}
+                label="Confidence"
+                color={(notification.confidence || 0) >= 70 ? 'green' : (notification.confidence || 0) >= 50 ? 'yellow' : 'red'}
+              />
+              <ProgressBar
+                value={notification.strength || 0}
+                label="Strength"
+                color={(notification.strength || 0) >= 70 ? 'green' : (notification.strength || 0) >= 50 ? 'yellow' : 'red'}
+              />
+            </div>
+
+            {/* Technical Indicators Summary */}
+            {notification.technicalIndicators && (
               <div className="mb-6">
                 <h4 className="text-lg font-semibold mb-3">Technical Indicators</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {Object.entries(notification.signalData.technicalIndicators).map(([key, value]) => (
-                    <div key={key} className="bg-gray-700 rounded-lg p-4">
-                      <div className="text-sm text-gray-400 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</div>
-                      <div className="text-lg font-semibold">
-                        {typeof value === 'number' ? value.toFixed(2) :
-                         typeof value === 'object' && value !== null ? JSON.stringify(value) :
-                         String(value)}
-                      </div>
-                    </div>
-                  ))}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {Object.entries(notification.technicalIndicators)
+                    .filter(([key]) => ['rsi', 'macd', 'ema', 'bollinger', 'movingaverages'].some(indicator =>
+                      key.toLowerCase().includes(indicator)
+                    ))
+                    .map(([key, value]) => {
+                      const signal = getIndicatorSignal(key, value);
+                      let displayName = key.replace(/([A-Z])/g, ' $1').trim();
+
+                      // Special handling for moving averages to show as "EMA Trend"
+                      if (key.toLowerCase().includes('movingaverages')) {
+                        displayName = 'EMA Trend';
+                      }
+
+                      const formattedValue = formatIndicatorValue(key, value);
+                      return (
+                        <div key={key} className="bg-gray-700 rounded-lg p-4">
+                          <div className="flex justify-between items-center mb-2">
+                            <div className="text-sm text-gray-400 capitalize">{displayName}</div>
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${
+                              signal === 'Bullish' ? 'bg-green-500/20 text-green-400' :
+                              signal === 'Bearish' ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'
+                            }`}>
+                              {signal}
+                            </span>
+                          </div>
+                          <div className="text-sm text-gray-300">{formattedValue}</div>
+                        </div>
+                      );
+                    })}
                 </div>
               </div>
             )}
 
             {/* Chart Patterns */}
-            {notification.signalData.chartPatterns && notification.signalData.chartPatterns.length > 0 && (
+            {notification.chartPatterns && notification.chartPatterns.length > 0 && (
               <div className="mb-6">
                 <h4 className="text-lg font-semibold mb-3">Chart Patterns Detected</h4>
                 <div className="space-y-3">
-                  {notification.signalData.chartPatterns.map((pattern, index) => (
+                  {notification.chartPatterns.map((pattern: any, index: number) => (
                     <div key={index} className="bg-gray-700 rounded-lg p-4">
                       <div className="flex items-center justify-between">
                         <div>
@@ -345,11 +606,11 @@ export default function NotificationDetailPage() {
             )}
 
             {/* Candlestick Patterns */}
-            {notification.signalData.candlestickPatterns && notification.signalData.candlestickPatterns.length > 0 && (
+            {notification.candlestickPatterns && notification.candlestickPatterns.length > 0 && (
               <div className="mb-6">
                 <h4 className="text-lg font-semibold mb-3">Candlestick Patterns</h4>
                 <div className="space-y-3">
-                  {notification.signalData.candlestickPatterns.map((pattern, index) => (
+                  {notification.candlestickPatterns.map((pattern: any, index: number) => (
                     <div key={index} className="bg-gray-700 rounded-lg p-4">
                       <div className="flex items-center justify-between">
                         <div>
@@ -370,12 +631,12 @@ export default function NotificationDetailPage() {
             )}
 
             {/* Reasoning */}
-            {notification.signalData.reasoning && notification.signalData.reasoning.length > 0 && (
+            {notification.analysisReasoning && notification.analysisReasoning.length > 0 && (
               <div>
                 <h4 className="text-lg font-semibold mb-3">Analysis Reasoning</h4>
                 <div className="bg-gray-700 rounded-lg p-4">
                   <ul className="space-y-2">
-                    {notification.signalData.reasoning.map((reason, index) => (
+                    {notification.analysisReasoning.map((reason: string, index: number) => (
                       <li key={index} className="flex items-start gap-2">
                         <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
                         <span>{reason}</span>
@@ -385,6 +646,173 @@ export default function NotificationDetailPage() {
                 </div>
               </div>
             )}
+          </div>
+        ) : null}
+
+
+
+        {/* Single timeframe notifications - show technical analysis if available */}
+        {notification.timeframe && notification.timeframe !== 'multi' && (
+          <div className="bg-gray-800 rounded-lg p-6 mb-6">
+            <h3 className="text-xl font-semibold mb-4">Technical Analysis - {notification.timeframe.toUpperCase()}</h3>
+
+            {/* Basic Signal Info */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              <div className="bg-gray-700 rounded-lg p-4">
+                <div className="text-sm text-gray-400">Exchange</div>
+                <div className="text-lg font-semibold">{notification.exchange || 'binance'}</div>
+              </div>
+              {notification.currentPrice && (
+                <div className="bg-gray-700 rounded-lg p-4">
+                  <div className="text-sm text-gray-400">Price at Signal</div>
+                  <div className="text-lg font-semibold">${notification.currentPrice.toFixed(2)}</div>
+                </div>
+              )}
+              <div className="bg-gray-700 rounded-lg p-4">
+                <div className="text-sm text-gray-400">Timeframe</div>
+                <div className="text-lg font-semibold">{notification.timeframe.toUpperCase()}</div>
+              </div>
+              <div className="bg-gray-700 rounded-lg p-4">
+                <div className="text-sm text-gray-400">Generated At</div>
+                <div className="text-lg font-semibold">{new Date(notification.createdAt).toLocaleTimeString()}</div>
+              </div>
+            </div>
+
+            {/* Show confidence and strength */}
+            {(notification.confidence !== undefined || notification.strength !== undefined) && (
+              <div className="mb-6 max-w-md">
+                {notification.confidence !== undefined && (
+                  <ProgressBar
+                    value={notification.confidence}
+                    label="Confidence"
+                    color={notification.confidence >= 70 ? 'green' : notification.confidence >= 50 ? 'yellow' : 'red'}
+                  />
+                )}
+                {notification.strength !== undefined && (
+                  <ProgressBar
+                    value={notification.strength}
+                    label="Strength"
+                    color={notification.strength >= 70 ? 'green' : notification.strength >= 50 ? 'yellow' : 'red'}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* Technical Indicators */}
+            {notification.technicalIndicators && (
+              <div className="mb-6">
+                <h4 className="text-lg font-semibold mb-3">Technical Indicators</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {Object.entries(notification.technicalIndicators)
+                    .filter(([key]) => ['rsi', 'macd', 'ema', 'bollinger', 'movingaverages'].some(indicator =>
+                      key.toLowerCase().includes(indicator)
+                    ))
+                    .map(([key, value]) => {
+                      const signal = getIndicatorSignal(key, value);
+                      let displayName = key.replace(/([A-Z])/g, ' $1').trim();
+
+                      // Special handling for moving averages to show as "EMA Trend"
+                      if (key.toLowerCase().includes('movingaverages')) {
+                        displayName = 'EMA Trend';
+                      }
+
+                      const formattedValue = formatIndicatorValue(key, value);
+                      return (
+                        <div key={key} className="bg-gray-700 rounded-lg p-4">
+                          <div className="flex justify-between items-center mb-2">
+                            <div className="text-sm text-gray-400">{displayName}</div>
+                            <div className={`text-sm font-semibold ${
+                              signal === 'Bullish' ? 'text-green-400' :
+                              signal === 'Bearish' ? 'text-red-400' : 'text-yellow-400'
+                            }`}>
+                              {signal}
+                            </div>
+                          </div>
+                          <div className="text-lg font-semibold">{formattedValue}</div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
+
+            {/* Chart Patterns */}
+            {notification.chartPatterns && Array.isArray(notification.chartPatterns) && notification.chartPatterns.length > 0 && (
+              <div className="mb-6">
+                <h4 className="text-lg font-semibold mb-3">Chart Patterns</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {notification.chartPatterns.map((pattern: any, index: number) => (
+                    <div key={index} className="bg-gray-700 rounded-lg p-4">
+                      <div className="text-sm text-gray-400">Pattern</div>
+                      <div className="text-lg font-semibold">{pattern.name || pattern.type || 'Unknown Pattern'}</div>
+                      {pattern.confidence && (
+                        <div className="text-sm text-gray-300">Confidence: {pattern.confidence}%</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Candlestick Patterns */}
+            {notification.candlestickPatterns && Array.isArray(notification.candlestickPatterns) && notification.candlestickPatterns.length > 0 && (
+              <div className="mb-6">
+                <h4 className="text-lg font-semibold mb-3">Candlestick Patterns</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {notification.candlestickPatterns.map((pattern: any, index: number) => (
+                    <div key={index} className="bg-gray-700 rounded-lg p-4">
+                      <div className="text-sm text-gray-400">Pattern</div>
+                      <div className="text-lg font-semibold">{pattern.name || pattern.type || 'Unknown Pattern'}</div>
+                      {pattern.strength && (
+                        <div className="text-sm text-gray-300">Strength: {pattern.strength}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Analysis Reasoning */}
+            {notification.analysisReasoning && Array.isArray(notification.analysisReasoning) && notification.analysisReasoning.length > 0 && (
+              <div className="mb-6">
+                <h4 className="text-lg font-semibold mb-3">Analysis Reasoning</h4>
+                <div className="bg-gray-700 rounded-lg p-4">
+                  <ul className="space-y-2">
+                    {notification.analysisReasoning.map((reason: string, index: number) => (
+                      <li key={index} className="text-gray-300">• {reason}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Fallback for notifications without proper timeframe data */}
+        {!notification.timeframe && (
+          <div className="bg-gray-800 rounded-lg p-6 mb-6">
+            <h3 className="text-xl font-semibold mb-4">Notification Details</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+              <div className="bg-gray-700 rounded-lg p-4">
+                <div className="text-sm text-gray-400">Exchange</div>
+                <div className="text-lg font-semibold">{notification.exchange || 'binance'}</div>
+              </div>
+              {notification.currentPrice && (
+                <div className="bg-gray-700 rounded-lg p-4">
+                  <div className="text-sm text-gray-400">Current Price</div>
+                  <div className="text-lg font-semibold">${notification.currentPrice.toFixed(2)}</div>
+                </div>
+              )}
+              <div className="bg-gray-700 rounded-lg p-4">
+                <div className="text-sm text-gray-400">Generated At</div>
+                <div className="text-lg font-semibold">{new Date(notification.createdAt).toLocaleTimeString()}</div>
+              </div>
+            </div>
+
+            <div className="text-gray-300">
+              This notification was generated without specific timeframe analysis.
+              It may be based on general market conditions or rule-specific criteria.
+            </div>
           </div>
         )}
 

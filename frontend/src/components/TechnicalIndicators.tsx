@@ -17,15 +17,6 @@ interface TechnicalIndicatorsProps {
     };
     ema20: number;
     ema50: number;
-    stochastic: {
-      k: number;
-      d: number;
-    };
-    obv?: {
-      current: number;
-      trend: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
-      divergence: 'BULLISH' | 'BEARISH' | 'NONE';
-    };
   };
   currentPrice?: number;
   compact?: boolean;
@@ -92,36 +83,7 @@ export default function TechnicalIndicators({ indicators, currentPrice, compact 
       type: 'macd'
     });
 
-    // OBV analysis (18 + 12 = up to 30 points)
-    let obvPoints = 0;
-    let obvStatus = '';
-    if (indicators.obv) {
-      if (indicators.obv.trend === 'BULLISH') {
-        obvPoints += 18;
-        obvStatus = 'BULLISH';
-      } else if (indicators.obv.trend === 'BEARISH') {
-        obvPoints += 18;
-        obvStatus = 'BEARISH';
-      }
 
-      // Additional points for divergence
-      if (indicators.obv.divergence === 'BULLISH') {
-        obvPoints += 12;
-        obvStatus = 'BULLISH';
-      } else if (indicators.obv.divergence === 'BEARISH') {
-        obvPoints += 12;
-        obvStatus = 'BEARISH';
-      }
-
-      if (obvPoints === 0) obvStatus = 'NEUTRAL';
-
-      indicatorScores.push({
-        name: 'OBV',
-        points: obvPoints,
-        status: obvStatus,
-        type: 'obv'
-      });
-    }
 
     // EMA analysis (15 points)
     let emaPoints = 0;
@@ -140,39 +102,13 @@ export default function TechnicalIndicators({ indicators, currentPrice, compact 
       type: 'ema'
     });
 
-    // Stochastic analysis (15 points for extreme conditions, scaled for others)
-    let stochPoints = 0;
-    let stochStatus = '';
-    const avgStoch = (indicators.stochastic.k + indicators.stochastic.d) / 2;
 
-    if (indicators.stochastic.k < 20 && indicators.stochastic.d < 20) {
-      stochPoints = 15;
-      stochStatus = 'BULLISH';
-    } else if (indicators.stochastic.k > 80 && indicators.stochastic.d > 80) {
-      stochPoints = 15;
-      stochStatus = 'BEARISH';
-    } else {
-      // Scale points based on how close to extreme levels
-      if (avgStoch < 50) {
-        stochPoints = Math.round((50 - avgStoch) / 50 * 10); // 0-10 points for bearish tendency
-        stochStatus = 'BULLISH';
-      } else {
-        stochPoints = Math.round((avgStoch - 50) / 50 * 10); // 0-10 points for bullish tendency
-        stochStatus = 'BEARISH';
-      }
-    }
-    indicatorScores.push({
-      name: 'Stochastic',
-      points: stochPoints,
-      status: stochStatus,
-      type: 'stochastic'
-    });
 
     // Bollinger Bands analysis (25 points for extreme, scaled for position within bands)
     let bbPoints = 0;
     let bbStatus = '';
     if (currentPrice && indicators.bollingerBands) {
-      const { upper, middle, lower } = indicators.bollingerBands;
+      const { upper, lower } = indicators.bollingerBands;
 
       if (currentPrice > upper) {
         bbPoints = 25;
@@ -290,39 +226,7 @@ export default function TechnicalIndicators({ indicators, currentPrice, compact 
           </div>
         );
 
-      case 'stochastic':
-        return (
-          <div className="space-y-1 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-400">%K:</span>
-              <span className="text-gray-100">{formatIndicatorValue(safeNumber(indicators.stochastic.k), 1)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">%D:</span>
-              <span className="text-gray-100">{formatIndicatorValue(safeNumber(indicators.stochastic.d), 1)}</span>
-            </div>
-          </div>
-        );
 
-      case 'obv':
-        return indicators.obv ? (
-          <div className="space-y-1 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-400">Current:</span>
-              <span className="text-gray-100">{formatOBVValue(indicators.obv.current)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">Trend:</span>
-              <span className={getOBVTrendColor(indicators.obv.trend)}>{indicators.obv.trend}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400">Divergence:</span>
-              <span className={getOBVDivergenceColor(indicators.obv.divergence)}>
-                {indicators.obv.divergence === 'NONE' ? 'None' : indicators.obv.divergence}
-              </span>
-            </div>
-          </div>
-        ) : null;
 
       default:
         return null;
@@ -344,31 +248,7 @@ export default function TechnicalIndicators({ indicators, currentPrice, compact 
     );
   }
 
-  // OBV helper functions
-  const getOBVTrendColor = (trend: string) => {
-    switch (trend) {
-      case 'BULLISH': return 'text-green-400';
-      case 'BEARISH': return 'text-red-400';
-      default: return 'text-yellow-400';
-    }
-  };
 
-  const getOBVDivergenceColor = (divergence: string) => {
-    switch (divergence) {
-      case 'BULLISH': return 'text-green-400';
-      case 'BEARISH': return 'text-red-400';
-      default: return 'text-gray-400';
-    }
-  };
-
-  const formatOBVValue = (value: number) => {
-    if (Math.abs(value) >= 1000000) {
-      return (value / 1000000).toFixed(2) + 'M';
-    } else if (Math.abs(value) >= 1000) {
-      return (value / 1000).toFixed(2) + 'K';
-    }
-    return value.toFixed(2);
-  };
 
   const formatPrice = (price: number) => {
     if (price === null || price === undefined || isNaN(price)) {

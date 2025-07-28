@@ -34,7 +34,8 @@ model NotificationRule {
   // Rule conditions
   minConfidence        Float?   // Minimum confidence percentage (0-100)
   minStrength          Float?   // Minimum signal strength (0-100)
-  requiredTimeframes   Int?     // Number of timeframes that must agree
+  requiredTimeframes   Int?     // Number of timeframes that must agree (deprecated, use specificTimeframes)
+  specificTimeframes   Json?    // Array of specific timeframes to check (e.g., ["1m", "5m", "1h"])
   requiredSignalType   String?  // 'BUY', 'SELL', 'HOLD', or null for any
 
   // Advanced rule logic (JSON format for complex conditions)
@@ -101,6 +102,15 @@ model Notification {
   confidence           Float?   // Confidence percentage (0-100)
   strength             Float?   // Signal strength (0-100)
   timeframe            String?  // Timeframe that triggered the notification
+
+  // Technical analysis data (stored at notification creation)
+  technicalIndicators  Json?    // Technical indicators data (RSI, MACD, EMA, Bollinger)
+  chartPatterns        Json?    // Detected chart patterns
+  candlestickPatterns  Json?    // Detected candlestick patterns
+  triggeredTimeframes  Json?    // Array of timeframes that triggered this notification
+  analysisReasoning    Json?    // Array of reasoning strings for the analysis
+  currentPrice         Float?   // Price at the time of notification
+  exchange             String?  // Exchange where the signal was detected
 
   // Notification settings
   hasVisual            Boolean  @default(true)

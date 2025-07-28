@@ -132,16 +132,7 @@ export const generateAdvancedSignals = async (req: Request, res: Response) => {
                     lower: indicators.bollingerBands.lower
                 },
                 ema20: indicators.ema20,
-                ema50: indicators.ema50,
-                stochastic: {
-                    k: indicators.stochastic.k,
-                    d: indicators.stochastic.d
-                },
-                obv: {
-                    current: indicators.obv.current,
-                    trend: indicators.obv.trend,
-                    divergence: indicators.obv.divergence
-                }
+                ema50: indicators.ema50
             },
             chartPatterns,
             candlestickPatterns,
@@ -170,7 +161,7 @@ export const generateAdvancedSignals = async (req: Request, res: Response) => {
 export const getMultiTimeframeAnalysis = async (req: Request, res: Response) => {
     try {
         const { symbol } = req.query;
-        const timeframes = ['1m', '15m', '30m', '4h'];
+        const timeframes = ['1m', '5m', '15m', '4h'];
 
         if (!symbol) {
             return res.status(400).json({

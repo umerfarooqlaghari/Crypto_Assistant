@@ -60,23 +60,7 @@ SCORING SYSTEM FOR EACH INDICATOR
    - MACD: -0.005828, Signal: -0.004609, Histogram: -0.00122
    - Since MACD < Signal AND Histogram < 0: 20 BEARISH points
 
-3. OBV (ON-BALANCE VOLUME)
-   Maximum Points: 30 (18 + 12)
-   
-   TREND ANALYSIS (18 points):
-   - OBV Trend = BULLISH: 18 BULLISH points
-   - OBV Trend = BEARISH: 18 BEARISH points
-   - OBV Trend = NEUTRAL: 0 points
-   
-   DIVERGENCE ANALYSIS (12 additional points):
-   - Bullish Divergence: +12 BULLISH points
-   - Bearish Divergence: +12 BEARISH points
-   - No Divergence: 0 additional points
-   
-   Example:
-   - Trend: BULLISH (18 points) + Divergence: NONE (0 points) = 18 BULLISH points
-
-4. EMA TREND (EMA20 vs EMA50)
+3. EMA TREND (EMA20 vs EMA50)
    Fixed Points: 15
    
    CONDITIONS (Always Awards Points):
@@ -87,23 +71,7 @@ SCORING SYSTEM FOR EACH INDICATOR
    - EMA20: $0.80151296, EMA50: $0.81539769
    - Since EMA20 < EMA50: 15 BEARISH points
 
-5. STOCHASTIC OSCILLATOR
-   Maximum Points: 15
-   
-   EXTREME CONDITIONS (Full Points):
-   - %K < 20 AND %D < 20: 15 BULLISH points
-   - %K > 80 AND %D > 80: 15 BEARISH points
-   
-   MODERATE CONDITIONS (Scaled Points):
-   - Average Stoch = (%K + %D) / 2
-   - If Average < 50: Points = (50 - Average) / 50 × 10 (0-10 BULLISH points)
-   - If Average > 50: Points = (Average - 50) / 50 × 10 (0-10 BEARISH points)
-   
-   Example:
-   - %K: 14.8, %D: 15.0 (assuming), Average: 14.9
-   - Since both < 20: 15 BULLISH points
-
-6. BOLLINGER BANDS
+4. BOLLINGER BANDS
    Maximum Points: 25
    
    EXTREME CONDITIONS (Full Points):
@@ -125,13 +93,11 @@ DISPLAY FORMAT
 
 COMPACT VIEW (Above-the-fold):
 ------------------------------
-Shows 6 indicators in a 2-column grid:
+Shows 4 indicators in a 2-column grid:
 - RSI: Bullish/Bearish/Neutral
 - MACD: Bullish/Bearish
-- EMA Cross: Bullish/Bearish  
-- Stochastic: Bullish/Bearish/Neutral
+- EMA Cross: Bullish/Bearish
 - Bollinger: Bullish/Bearish/Neutral
-- OBV: Bullish/Bearish/Neutral (if available)
 
 DETAILED VIEW (Below-the-fold):
 -------------------------------
@@ -148,11 +114,9 @@ Format for each indicator:
 
 Example Display Order (based on sample data):
 1. MACD - 20 pts - BEARISH
-2. OBV - 18 pts - BULLISH  
-3. Bollinger Bands - 18 pts - BULLISH
-4. EMA Trend - 15 pts - BEARISH
-5. Stochastic - 15 pts - BULLISH
-6. RSI - 5 pts - BEARISH
+2. Bollinger Bands - 18 pts - BULLISH
+3. EMA Trend - 15 pts - BEARISH
+4. RSI - 5 pts - BEARISH
 
 COLOR CODING
 ===============================================================================

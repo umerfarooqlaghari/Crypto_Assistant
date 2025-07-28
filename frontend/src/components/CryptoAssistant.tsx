@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { getApiUrl, getWebSocketUrl, API_CONFIG } from '../utils/api';
 import SymbolSelector from './SymbolSelector';
 import TimeframeSelector from './TimeframeSelector';
-import SignalDisplay from './SignalDisplay';
+
 import TechnicalIndicators from './TechnicalIndicators';
 import PatternAnalysis from './PatternAnalysis';
 import MarketOverview from './MarketOverview';
@@ -282,7 +282,7 @@ export default function CryptoAssistant({ initialSymbol = 'BTCUSDT' }: CryptoAss
               signalData.signal.action === 'SELL' ? 'from-red-900/30 to-red-800/20 border-red-500/40' :
               'from-yellow-900/30 to-yellow-800/20 border-yellow-500/40'
             }`}>
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <div className={`${
                     signalData.signal.action === 'BUY' ? 'text-green-400' :
@@ -298,18 +298,42 @@ export default function CryptoAssistant({ initialSymbol = 'BTCUSDT' }: CryptoAss
                   </span>
                 </div>
                 <div className="text-right">
-                  <div className="text-sm text-gray-400">Confidence</div>
-                  <div className="text-lg font-bold text-white">{signalData.signal.confidence}%</div>
+                  <div className="text-sm text-gray-400">Timeframe</div>
+                  <div className="text-lg font-bold text-white">{signalData.timeframe}</div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div>
-                  <span className="text-gray-400">Strength:</span>
-                  <span className="text-white font-semibold ml-1">{signalData.signal.strength}%</span>
+
+              {/* Confidence Progress Bar */}
+              <div className="mb-3">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-sm text-gray-400">Confidence</span>
+                  <span className="text-sm font-semibold text-white">{signalData.signal.confidence}%</span>
                 </div>
-                <div>
-                  <span className="text-gray-400">Timeframe:</span>
-                  <span className="text-white font-semibold ml-1">{signalData.timeframe}</span>
+                <div className="w-full bg-gray-700/50 rounded-full h-2">
+                  <div
+                    className={`h-2 rounded-full transition-all duration-500 ${
+                      signalData.signal.confidence >= 80 ? 'bg-green-500' :
+                      signalData.signal.confidence >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                    }`}
+                    style={{ width: `${Math.min(signalData.signal.confidence, 100)}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Strength Progress Bar */}
+              <div className="mb-2">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-sm text-gray-400">Strength</span>
+                  <span className="text-sm font-semibold text-white">{signalData.signal.strength}%</span>
+                </div>
+                <div className="w-full bg-gray-700/50 rounded-full h-2">
+                  <div
+                    className={`h-2 rounded-full transition-all duration-500 ${
+                      signalData.signal.strength >= 80 ? 'bg-blue-500' :
+                      signalData.signal.strength >= 60 ? 'bg-purple-500' : 'bg-gray-500'
+                    }`}
+                    style={{ width: `${Math.min(signalData.signal.strength, 100)}%` }}
+                  />
                 </div>
               </div>
             </div>
@@ -350,16 +374,7 @@ export default function CryptoAssistant({ initialSymbol = 'BTCUSDT' }: CryptoAss
                     {signalData.technicalIndicators.ema20 > signalData.technicalIndicators.ema50 ? 'Bullish' : 'Bearish'}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Stochastic:</span>
-                  <span className={`font-semibold ${
-                    signalData.technicalIndicators.stochastic?.k > 80 ? 'text-red-400' :
-                    signalData.technicalIndicators.stochastic?.k < 20 ? 'text-green-400' : 'text-yellow-400'
-                  }`}>
-                    {signalData.technicalIndicators.stochastic?.k > 80 ? 'Bearish' :
-                     signalData.technicalIndicators.stochastic?.k < 20 ? 'Bullish' : 'Neutral'}
-                  </span>
-                </div>
+
                 <div className="flex justify-between">
                   <span className="text-gray-400">Bollinger:</span>
                   <span className={`font-semibold ${
@@ -370,18 +385,7 @@ export default function CryptoAssistant({ initialSymbol = 'BTCUSDT' }: CryptoAss
                      (realTimeData?.price || signalData?.currentPrice || 0) < signalData.technicalIndicators.bollingerBands?.lower ? 'Bullish' : 'Neutral'}
                   </span>
                 </div>
-                {signalData.technicalIndicators.obv && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">OBV:</span>
-                    <span className={`font-semibold ${
-                      signalData.technicalIndicators.obv.trend === 'BULLISH' ? 'text-green-400' :
-                      signalData.technicalIndicators.obv.trend === 'BEARISH' ? 'text-red-400' : 'text-yellow-400'
-                    }`}>
-                      {signalData.technicalIndicators.obv.trend === 'BULLISH' ? 'Bullish' :
-                       signalData.technicalIndicators.obv.trend === 'BEARISH' ? 'Bearish' : 'Neutral'}
-                    </span>
-                  </div>
-                )}
+
               </div>
             </div>
 

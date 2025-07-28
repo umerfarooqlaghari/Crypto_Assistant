@@ -11,6 +11,7 @@ export interface NotificationRule {
   minConfidence?: number | null;
   minStrength?: number | null;
   requiredTimeframes?: number | null;
+  specificTimeframes?: string[] | null;
   requiredSignalType?: string | null;
   priority: string;
   enableSound: boolean;
@@ -75,18 +76,24 @@ export class NotificationRuleChecker {
   /**
    * Check a specific rule against a specific coin
    */
-  private async checkRuleAgainstCoin(rule: NotificationRule, coin: CoinListItem): Promise<void> {
+  private async checkRuleAgainstCoin(rule: any, coin: CoinListItem): Promise<void> {
     try {
       const ruleKey = `${rule.id}-${coin.symbol}`;
 
+      // Convert the rule to our expected format
+      const typedRule: NotificationRule = {
+        ...rule,
+        specificTimeframes: Array.isArray(rule.specificTimeframes) ? rule.specificTimeframes : null
+      };
+
       // Check if coin meets rule criteria
-      const matchingSignals = this.evaluateRuleAgainstCoin(rule, coin);
+      const matchingSignals = this.evaluateRuleAgainstCoin(typedRule, coin);
 
       if (matchingSignals.length > 0) {
         // Check if values have changed since last notification
         if (this.hasSignificantChange(ruleKey, matchingSignals, coin)) {
           // Values have changed significantly, generate notification
-          await this.generateNotification(rule, coin, matchingSignals);
+          await this.generateNotification(typedRule, coin, matchingSignals);
 
           // Update last notification time and values
           this.lastNotificationTimes.set(ruleKey, new Date());
@@ -107,10 +114,19 @@ export class NotificationRuleChecker {
    */
   private evaluateRuleAgainstCoin(rule: NotificationRule, coin: CoinListItem): Array<{timeframe: string, signal: any}> {
     const matchingSignals: Array<{timeframe: string, signal: any}> = [];
-    const timeframes = ['5m', '15m', '30m', '1h', '4h', '1d'];
+
+    // Determine which timeframes to check
+    let timeframesToCheck: string[];
+    if (rule.specificTimeframes && rule.specificTimeframes.length > 0) {
+      // Use specific timeframes selected by user
+      timeframesToCheck = rule.specificTimeframes;
+    } else {
+      // Fallback to all available timeframes for backward compatibility
+      timeframesToCheck = ['1m', '5m', '15m', '1h', '4h', '1d'];
+    }
 
     // Check each timeframe
-    for (const timeframe of timeframes) {
+    for (const timeframe of timeframesToCheck) {
       const signal = coin.confidence[timeframe as keyof typeof coin.confidence];
 
       if (!signal) continue;
@@ -137,8 +153,16 @@ export class NotificationRuleChecker {
       });
     }
 
-    // Rule is satisfied if we have enough matching signals
-    const requiredCount = rule.requiredTimeframes || 1;
+    // Determine required count for matching signals
+    let requiredCount: number;
+    if (rule.specificTimeframes && rule.specificTimeframes.length > 0) {
+      // For specific timeframes, require all selected timeframes to match
+      requiredCount = rule.specificTimeframes.length;
+    } else {
+      // Fallback to legacy requiredTimeframes field
+      requiredCount = rule.requiredTimeframes || 1;
+    }
+
     return matchingSignals.length >= requiredCount ? matchingSignals : [];
   }
 
@@ -161,22 +185,98 @@ export class NotificationRuleChecker {
       const primarySignal = matchingSignals[0].signal;
       const primaryTimeframe = matchingSignals[0].timeframe;
 
-      // Create notification title and message
+      // Create notification title and message with timeframe details
+      const timeframeList = matchingSignals.map(ms => ms.timeframe).join(', ');
       const title = `${rule.name}: ${coin.symbol} ${primarySignal.action} Signal`;
-      const message = `${coin.symbol} meets ${rule.name} criteria with ${avgConfidence.toFixed(1)}% confidence and ${avgStrength.toFixed(1)}% strength across ${matchingSignals.length} timeframe(s)`;
+      const message = `${coin.symbol} meets ${rule.name} criteria with ${avgConfidence.toFixed(1)}% confidence and ${avgStrength.toFixed(1)}% strength across timeframes: ${timeframeList}`;
 
-      // Find the most recent signal in the database for this coin
-      const recentSignal = await prisma.signalHistory.findFirst({
-        where: {
-          symbol: coin.symbol,
-          timeframe: primaryTimeframe
-        },
-        orderBy: {
-          generatedAt: 'desc'
+      // Get fresh technical analysis data for this coin and timeframe
+      let technicalIndicators = null;
+      let chartPatterns = null;
+      let candlestickPatterns = null;
+      let analysisReasoning = null;
+      let currentPrice = coin.price;
+
+      try {
+        // Import the enhanced signal service to get current technical analysis
+        const EnhancedSignalOrchestrator = (await import('./enhancedSignalOrchestrator')).default;
+        const signalOrchestrator = new EnhancedSignalOrchestrator();
+
+        // Get current technical analysis for the primary timeframe
+        const currentAnalysis = await signalOrchestrator.processSignal(
+          coin.symbol,
+          primaryTimeframe,
+          'binance'
+        );
+
+        if (currentAnalysis && currentAnalysis.signal) {
+          const signal = currentAnalysis.signal;
+          technicalIndicators = signal.technicalIndicators || null;
+          chartPatterns = signal.chartPatterns || null;
+          candlestickPatterns = signal.candlestickPatterns || null;
+          analysisReasoning = signal.reasoning || null;
+          currentPrice = signal.currentPrice || coin.price;
         }
-      });
+      } catch (error) {
+        logError(`Failed to get current technical analysis for ${coin.symbol}`, error as Error);
 
-      // Create notification in database
+        // Fallback: try to get from recent signal in database
+        const recentSignal = await prisma.signalHistory.findFirst({
+          where: {
+            symbol: coin.symbol,
+            timeframe: primaryTimeframe
+          },
+          orderBy: {
+            generatedAt: 'desc'
+          }
+        });
+
+        if (recentSignal) {
+          technicalIndicators = recentSignal.technicalIndicators;
+          chartPatterns = recentSignal.chartPatterns;
+          candlestickPatterns = recentSignal.candlestickPatterns;
+          analysisReasoning = recentSignal.reasoning;
+          currentPrice = recentSignal.currentPrice || coin.price;
+        }
+      }
+
+      // Determine if this is a multi-timeframe notification
+      const triggeredTimeframes = matchingSignals.map(ms => ms.timeframe);
+      const isMultiTimeframe = triggeredTimeframes.length > 1;
+
+      // For multi-timeframe notifications, collect technical analysis from all timeframes
+      let multiTimeframeAnalysis: Record<string, any> | null = null;
+      if (isMultiTimeframe) {
+        multiTimeframeAnalysis = {};
+
+        // Get technical analysis for each triggered timeframe
+        for (const timeframe of triggeredTimeframes) {
+          try {
+            const EnhancedSignalOrchestrator = (await import('./enhancedSignalOrchestrator')).default;
+            const signalOrchestrator = new EnhancedSignalOrchestrator();
+
+            const analysis = await signalOrchestrator.processSignal(
+              coin.symbol,
+              timeframe,
+              'binance'
+            );
+
+            if (analysis && analysis.signal) {
+              multiTimeframeAnalysis[timeframe] = {
+                technicalIndicators: analysis.signal.technicalIndicators || null,
+                chartPatterns: analysis.signal.chartPatterns || null,
+                candlestickPatterns: analysis.signal.candlestickPatterns || null,
+                reasoning: analysis.signal.reasoning || null,
+                currentPrice: analysis.signal.currentPrice || coin.price
+              };
+            }
+          } catch (error) {
+            logError(`Failed to get technical analysis for ${coin.symbol} ${timeframe}`, error as Error);
+          }
+        }
+      }
+
+      // Create notification in database with technical analysis data
       const notification = await prisma.notification.create({
         data: {
           title,
@@ -187,11 +287,18 @@ export class NotificationRuleChecker {
           signal: primarySignal.action,
           confidence: avgConfidence,
           strength: avgStrength,
-          timeframe: primaryTimeframe,
+          timeframe: isMultiTimeframe ? 'multi' : primaryTimeframe,
           hasVisual: rule.enableVisual,
           ruleId: rule.id,
-          signalId: recentSignal?.id, // Link to signal if available
-          isRead: false
+          isRead: false,
+          // Store technical analysis data
+          technicalIndicators: isMultiTimeframe ? multiTimeframeAnalysis : technicalIndicators,
+          chartPatterns: isMultiTimeframe ? null : chartPatterns,
+          candlestickPatterns: isMultiTimeframe ? null : candlestickPatterns,
+          triggeredTimeframes: triggeredTimeframes,
+          analysisReasoning: isMultiTimeframe ? null : analysisReasoning,
+          currentPrice,
+          exchange: 'binance'
         }
       });
 

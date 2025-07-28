@@ -3,11 +3,11 @@ CRYPTO ASSISTANT - CONFIDENCE & STRENGTH SIGNAL CALCULATION SYSTEM
 
 OVERVIEW
 --------
-The system uses a comprehensive scoring algorithm that combines 5 core technical 
-indicators, chart patterns, and candlestick patterns to generate confidence and 
+The system uses a comprehensive scoring algorithm that combines 4 core technical
+indicators, chart patterns, and candlestick patterns to generate confidence and
 strength signals for trading decisions.
 
-CORE TECHNICAL INDICATORS (6 INDICATORS)
+CORE TECHNICAL INDICATORS (4 INDICATORS)
 ===============================================================================
 
 1. RSI (RELATIVE STRENGTH INDEX)
@@ -44,25 +44,7 @@ CORE TECHNICAL INDICATORS (6 INDICATORS)
      * EMA20 > EMA50: +15 BULLISH points (uptrend)
      * EMA20 < EMA50: +15 BEARISH points (downtrend)
 
-5. STOCHASTIC OSCILLATOR
-   - %K Period: 14 candles
-   - %D Period: 3 candles (smoothed %K)
-   - Range: 0-100
-   - Scoring:
-     * %K < 20 AND %D < 20: +15 BULLISH points (oversold)
-     * %K > 80 AND %D > 80: +15 BEARISH points (overbought)
 
-6. OBV (ON-BALANCE VOLUME)
-   - Calculation: Cumulative volume based on price direction
-   - Components: Current OBV, Trend Analysis, Divergence Detection
-   - Trend Analysis: Based on last 10 periods
-   - Divergence Analysis: Price vs OBV comparison over last 5 periods
-   - Scoring:
-     * OBV Bullish Trend: +18 BULLISH points
-     * OBV Bearish Trend: +18 BEARISH points
-     * OBV Bullish Divergence: +12 BULLISH points (additional)
-     * OBV Bearish Divergence: +12 BEARISH points (additional)
-   - Maximum possible: 30 points (18 trend + 12 divergence)
 
 CHART PATTERNS (ADVANCED DETECTION)
 ===============================================================================
@@ -131,16 +113,15 @@ Sample Analysis for BTCUSDT:
 - RSI: 25 (oversold) → +25 bullish points
 - MACD: Bullish crossover → +20 bullish points
 - EMA: EMA20 > EMA50 → +15 bullish points
-- Stochastic: 15/18 (oversold) → +15 bullish points
-- OBV: Bullish trend + bullish divergence → +30 bullish points (18+12)
+- Bollinger Bands: Price below lower band → +25 bullish points
 - Chart Pattern: Double Bottom (70%) → +21 bullish points
 - Candlestick: Hammer (75%) → +15 bullish points
 
-Total: 141 bullish points, 0 bearish points
-Net Score: +141
+Total: 121 bullish points, 0 bearish points
+Net Score: +121
 Action: BUY (score > 20)
-Confidence: min(max((141/50) × 100, 60), 100) = 100%
-Strength: 141
+Confidence: min(max((121/50) × 100, 60), 100) = 100%
+Strength: 121
 
 CONFIDENCE RANGES
 ===============================================================================
@@ -166,7 +147,7 @@ DATA REQUIREMENTS
 
 TIMEFRAME SUPPORT
 ===============================================================================
-- 1m, 5m, 15m, 30m, 1h, 4h, 1d
+- 1m, 5m, 15m, 1h, 4h, 1d
 - Each timeframe analyzed independently
 - Same algorithm applied across all timeframes
 - Results may vary significantly between timeframes

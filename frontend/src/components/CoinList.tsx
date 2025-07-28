@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { RefreshCw, TrendingUp, TrendingDown, Minus, Search, Filter } from 'lucide-react';
 import Link from 'next/link';
-import { io, Socket } from 'socket.io-client';
+import { io } from 'socket.io-client';
 import { getApiUrl, getWebSocketUrl, API_CONFIG } from '../utils/api';
 import NotificationSystem from './NotificationSystem';
 
@@ -22,9 +22,9 @@ interface CoinListItem {
   volume: number;
   marketCap?: number;
   confidence: {
+    '1m': ConfidenceSignal;
     '5m': ConfidenceSignal;
     '15m': ConfidenceSignal;
-    '30m': ConfidenceSignal;
     '1h': ConfidenceSignal;
     '4h': ConfidenceSignal;
     '1d': ConfidenceSignal;
@@ -54,16 +54,27 @@ export default function CoinList() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSignal, setFilterSignal] = useState<'ALL' | 'BUY' | 'SELL' | 'HOLD'>('ALL');
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-  const [socket, setSocket] = useState<Socket | null>(null);
+
   const [isConnected, setIsConnected] = useState(false);
   const [serviceStatus, setServiceStatus] = useState<{lastUpdate: number, isActive: boolean} | null>(null);
+
+  // Notification cron job state
+  const [notificationCronActive, setNotificationCronActive] = useState(false);
+
+  // Use ref to access current coins data in cron job
+  const coinsRef = useRef<CoinListItem[]>([]);
+
+  // Update ref whenever coins change
+  useEffect(() => {
+    coinsRef.current = coins;
+  }, [coins]);
 
 
 
   const timeframes = [
+    { key: '1m', label: '1m' },
     { key: '5m', label: '5m' },
     { key: '15m', label: '15m' },
-    { key: '30m', label: '30m' },
     { key: '1h', label: '1h' },
     { key: '4h', label: '4h' },
     { key: '1d', label: '1d' }
@@ -116,6 +127,7 @@ export default function CoinList() {
         const coinsData = await coinsResponse.json();
         const statsData = await statsResponse.json();
 
+        console.log('📊 Fetched coin list data:', coinsData.data?.length || 0, 'coins');
         setCoins(coinsData.data || []);
         setStats(statsData.data || null);
         setLastUpdate(new Date());
@@ -132,6 +144,68 @@ export default function CoinList() {
       setRefreshing(false);
     }
   };
+
+  // Notification cron job function
+  const startNotificationCronJob = useCallback(async (): Promise<(() => void) | null> => {
+    if (notificationCronActive) {
+      console.log('🔔 Notification cron job already active');
+      return null;
+    }
+
+    console.log('🔔 Starting notification cron job...');
+    setNotificationCronActive(true);
+
+    // Check notification rules every 15 seconds
+    const cronInterval = setInterval(async () => {
+      try {
+        // Get current coins data from ref (always up-to-date)
+        const currentCoins = coinsRef.current;
+
+        // Only run if we have coins data
+        if (currentCoins.length === 0) {
+          console.log('🔔 Notification cron: Waiting for coin data... (current coins length:', currentCoins.length, ')');
+          return;
+        }
+
+        console.log('🔔 Notification cron: Checking rules against', currentCoins.length, 'coins');
+
+        // Call the backend endpoint to check notification rules
+        const response = await fetch(getApiUrl('/api/admin/notification-rules/check'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            coins: currentCoins.map((coin: CoinListItem) => ({
+              symbol: coin.symbol,
+              name: coin.name,
+              price: coin.price,
+              priceChange24h: coin.priceChange24h,
+              volume: coin.volume,
+              confidence: coin.confidence,
+              lastUpdated: coin.lastUpdated
+            }))
+          })
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          console.log('🔔 Notification cron: Rules checked successfully', result);
+        } else {
+          console.error('🔔 Notification cron: Failed to check rules', response.status);
+        }
+      } catch (error) {
+        console.error('🔔 Notification cron: Error checking rules', error);
+      }
+    }, 15000); // Check every 15 seconds
+
+    // Store interval ID for cleanup
+    return () => {
+      clearInterval(cronInterval);
+      setNotificationCronActive(false);
+      console.log('🔔 Notification cron job stopped');
+    };
+  }, [notificationCronActive]); // Remove coins dependency
 
   // Initialize WebSocket connection for real-time updates
   useEffect(() => {
@@ -160,8 +234,8 @@ export default function CoinList() {
     newSocket.on('coinPriceUpdate', (data: { symbol: string, price: number, priceChange24h: number, volume: number, timestamp: number }) => {
       console.log('🔄 Real-time price update:', data.symbol, '$' + data.price.toFixed(6), data.priceChange24h.toFixed(2) + '%');
 
-      setCoins(prevCoins =>
-        prevCoins.map(coin =>
+      setCoins((prevCoins: CoinListItem[]) =>
+        prevCoins.map((coin: CoinListItem) =>
           coin.symbol === data.symbol
             ? { ...coin, price: data.price, priceChange24h: data.priceChange24h, volume: data.volume, lastUpdated: data.timestamp }
             : coin
@@ -174,8 +248,8 @@ export default function CoinList() {
     newSocket.on('coinConfidenceUpdate', (data: { symbol: string, confidence: any, lastUpdated: number, timestamp: number }) => {
       console.log('🎯 Real-time confidence update:', data.symbol, 'confidence updated');
 
-      setCoins(prevCoins =>
-        prevCoins.map(coin =>
+      setCoins((prevCoins: CoinListItem[]) =>
+        prevCoins.map((coin: CoinListItem) =>
           coin.symbol === data.symbol
             ? { ...coin, confidence: data.confidence, lastUpdated: data.lastUpdated }
             : coin
@@ -184,7 +258,7 @@ export default function CoinList() {
       setLastUpdate(new Date(data.timestamp));
     });
 
-    setSocket(newSocket);
+
 
     return () => {
       newSocket.close();
@@ -193,6 +267,7 @@ export default function CoinList() {
 
   // Initial load and periodic status checks
   useEffect(() => {
+    console.log('🚀 CoinList component mounted, fetching initial coin list...');
     fetchCoinList();
     checkServiceStatus();
 
@@ -204,6 +279,30 @@ export default function CoinList() {
     return () => clearInterval(statusInterval);
   }, []);
 
+  // Notification cron job useEffect - starts once when component mounts
+  useEffect(() => {
+    let cronCleanup: (() => void) | null = null;
+    let startTimer: ReturnType<typeof setTimeout> | null = null;
+
+    // Only start if not already active and this is the initial mount
+    if (!notificationCronActive) {
+      console.log('🔔 Starting notification cron job in 30 seconds...');
+
+      startTimer = setTimeout(async () => {
+        cronCleanup = await startNotificationCronJob();
+      }, 30000); // Start after 30 seconds
+    }
+
+    return () => {
+      if (startTimer) {
+        clearTimeout(startTimer);
+      }
+      if (cronCleanup) {
+        cronCleanup();
+      }
+    };
+  }, []); // Remove dependencies to prevent loop
+
   // Removed confidence refresh countdown timer - backend handles refresh automatically
 
   // Remove redundant auto-refresh since we have real-time updates via WebSocket
@@ -211,7 +310,7 @@ export default function CoinList() {
 
   // Calculate smart score for sorting (combines confidence and strength across timeframes)
   const calculateSmartScore = (coin: CoinListItem, targetAction?: 'BUY' | 'SELL' | 'HOLD') => {
-    const timeframes = ['5m', '15m', '30m', '1h', '4h', '1d'] as const;
+    const timeframes = ['1m', '5m', '15m', '1h', '4h', '1d'] as const;
     let totalScore = 0;
     let matchingSignals = 0;
 
@@ -246,7 +345,7 @@ export default function CoinList() {
 
   // Filter and sort coins based on search and signal filter
   const filteredCoins = coins
-    .filter(coin => {
+    .filter((coin: CoinListItem) => {
       const matchesSearch = coin.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            coin.symbol.toLowerCase().includes(searchTerm.toLowerCase());
 
@@ -255,10 +354,10 @@ export default function CoinList() {
       if (filterSignal === 'ALL') return true;
 
       // Check if any timeframe has the target signal
-      const timeframes = ['5m', '15m', '30m', '1h', '4h', '1d'] as const;
+      const timeframes = ['1m', '5m', '15m', '1h', '4h', '1d'] as const;
       return timeframes.some(tf => coin.confidence[tf].action === filterSignal);
     })
-    .sort((a, b) => {
+    .sort((a: CoinListItem, b: CoinListItem) => {
       // Smart sorting based on confidence and strength
       const targetAction = filterSignal === 'ALL' ? undefined : filterSignal;
       const scoreA = calculateSmartScore(a, targetAction);
@@ -442,9 +541,9 @@ export default function CoinList() {
                 <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">Coin</th>
                 <th className="px-6 py-4 text-right text-sm font-medium text-gray-300">Price</th>
                 <th className="px-6 py-4 text-right text-sm font-medium text-gray-300">24h Change</th>
+                <th className="px-6 py-4 text-center text-sm font-medium text-gray-300">1m</th>
                 <th className="px-6 py-4 text-center text-sm font-medium text-gray-300">5m</th>
                 <th className="px-6 py-4 text-center text-sm font-medium text-gray-300">15m</th>
-                <th className="px-6 py-4 text-center text-sm font-medium text-gray-300">30m</th>
                 <th className="px-6 py-4 text-center text-sm font-medium text-gray-300">1h</th>
                 <th className="px-6 py-4 text-center text-sm font-medium text-gray-300">4h</th>
                 <th className="px-6 py-4 text-center text-sm font-medium text-gray-300">1d</th>
@@ -452,7 +551,7 @@ export default function CoinList() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-700/50">
-              {filteredCoins.map((coin) => (
+              {filteredCoins.map((coin: CoinListItem) => (
                 <tr
                   key={coin.symbol}
                   className="hover:bg-gray-800/30 transition-colors"
@@ -476,13 +575,13 @@ export default function CoinList() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-center">
+                    {getSignalDisplay(coin.confidence['1m'])}
+                  </td>
+                  <td className="px-6 py-4 text-center">
                     {getSignalDisplay(coin.confidence['5m'])}
                   </td>
                   <td className="px-6 py-4 text-center">
                     {getSignalDisplay(coin.confidence['15m'])}
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    {getSignalDisplay(coin.confidence['30m'])}
                   </td>
                   <td className="px-6 py-4 text-center">
                     {getSignalDisplay(coin.confidence['1h'])}

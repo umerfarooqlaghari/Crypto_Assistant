@@ -138,7 +138,8 @@ export const getNotificationById = async (req: Request, res: Response): Promise<
             minConfidence: true,
             minStrength: true,
             requiredTimeframes: true,
-            requiredSignalType: true
+            requiredSignalType: true,
+            specificTimeframes: true
           }
         },
         signalHistory: {
@@ -170,10 +171,56 @@ export const getNotificationById = async (req: Request, res: Response): Promise<
       return;
     }
 
+    // For multi-timeframe notifications, create timeframe data from stored notification data
+    let multiTimeframeData = null;
+    if (notification.timeframe === 'multi' && notification.triggeredTimeframes) {
+      const timeframes = notification.triggeredTimeframes as string[];
+
+      // Create multi-timeframe data structure from stored notification data
+      multiTimeframeData = timeframes.map(tf => ({
+        timeframe: tf,
+        signalData: {
+          id: notification.id,
+          symbol: notification.symbol,
+          exchange: notification.exchange || 'binance',
+          timeframe: tf,
+          signal: notification.signal,
+          confidence: notification.confidence,
+          strength: notification.strength,
+          currentPrice: notification.currentPrice,
+          technicalIndicators: extractTimeframeIndicators(notification.technicalIndicators, tf),
+          chartPatterns: extractTimeframePatterns(notification.chartPatterns, tf),
+          candlestickPatterns: extractTimeframePatterns(notification.candlestickPatterns, tf),
+          reasoning: extractTimeframeReasoning(notification.analysisReasoning, tf),
+          generatedAt: notification.createdAt,
+          processingTimeMs: 0
+        }
+      }));
+    }
+
+    // Create signal data from stored notification data
+    const signalData = {
+      id: notification.signalId || notification.id,
+      symbol: notification.symbol,
+      exchange: notification.exchange || 'binance',
+      timeframe: notification.timeframe,
+      signal: notification.signal,
+      confidence: notification.confidence,
+      strength: notification.strength,
+      currentPrice: notification.currentPrice,
+      technicalIndicators: notification.technicalIndicators,
+      chartPatterns: notification.chartPatterns,
+      candlestickPatterns: notification.candlestickPatterns,
+      reasoning: notification.analysisReasoning,
+      generatedAt: notification.createdAt,
+      processingTimeMs: 0
+    };
+
     // Transform the data to match frontend interface
     const transformedNotification = {
       ...notification,
-      signalData: notification.signalHistory
+      signalData: signalData,
+      multiTimeframeData
     };
 
     res.json({
@@ -378,3 +425,39 @@ export const getSignalStats = async (req: Request, res: Response): Promise<void>
     });
   }
 };
+
+// Helper functions for extracting timeframe-specific data
+function extractTimeframeIndicators(technicalIndicators: any, timeframe: string): any {
+  if (!technicalIndicators || typeof technicalIndicators !== 'object') {
+    return null;
+  }
+
+  const result: any = {};
+  Object.keys(technicalIndicators).forEach(indicator => {
+    if (technicalIndicators[indicator] && technicalIndicators[indicator][timeframe]) {
+      result[indicator] = technicalIndicators[indicator][timeframe];
+    }
+  });
+
+  return Object.keys(result).length > 0 ? result : technicalIndicators;
+}
+
+function extractTimeframePatterns(patterns: any, timeframe: string): any[] {
+  if (!patterns || !Array.isArray(patterns)) {
+    return [];
+  }
+
+  return patterns.filter(pattern =>
+    pattern.timeframe === timeframe || !pattern.timeframe
+  );
+}
+
+function extractTimeframeReasoning(reasoning: any, timeframe: string): string[] {
+  if (!reasoning || !Array.isArray(reasoning)) {
+    return [];
+  }
+
+  return reasoning
+    .filter(reason => reason.startsWith(`${timeframe}:`))
+    .map(reason => reason.replace(`${timeframe}: `, ''));
+}

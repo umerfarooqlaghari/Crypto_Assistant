@@ -69,7 +69,7 @@ export class ConfigurableSignalService {
         minStrengthThreshold: parseFloat(minStrength?.settingValue || '75'),
         highStrengthThreshold: parseFloat(highStrength?.settingValue || '90'),
         requiredTimeframeConsensus: parseInt(requiredConsensus?.settingValue || '3'),
-        enabledTimeframes: enabledTimeframes ? JSON.parse(enabledTimeframes.settingValue) : ['5m', '15m', '30m', '1h', '4h'],
+        enabledTimeframes: enabledTimeframes ? JSON.parse(enabledTimeframes.settingValue) : ['1m', '5m', '15m', '1h', '4h'],
         signalUpdateIntervalSeconds: parseInt(updateInterval?.settingValue || '10')
       };
 
@@ -87,7 +87,7 @@ export class ConfigurableSignalService {
         minStrengthThreshold: 75,
         highStrengthThreshold: 90,
         requiredTimeframeConsensus: 3,
-        enabledTimeframes: ['5m', '15m', '30m', '1h', '4h'],
+        enabledTimeframes: ['1m', '5m', '15m', '1h', '4h'],
         signalUpdateIntervalSeconds: 10
       };
 

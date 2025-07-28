@@ -34,8 +34,8 @@ analysis:
 Timeframe     | Candles Used | Historical Period      | Update Frequency
 ------------- | ------------ | ---------------------- | ----------------
 1 minute      | 100 candles  | 1 hour 40 minutes      | Every 1 minute
+5 minutes     | 100 candles  | 8 hours 20 minutes     | Every 1 minute
 15 minutes    | 100 candles  | 25 hours               | Every 1 minute
-30 minutes    | 100 candles  | 50 hours (~2 days)     | Every 1 minute
 4 hours       | 100 candles  | 400 hours (~16.7 days) | Every 1 minute
 
 Minimum Requirement: 50 candles needed for accurate calculations
@@ -243,7 +243,7 @@ USER INTERFACE FEATURES
 Real-Time Dashboard:
 - Live price updates every 10 seconds
 - Signal updates every minute
-- Interactive timeframe selection (1m, 15m, 30m, 4h)
+- Interactive timeframe selection (1m, 5m, 15m, 4h)
 - Cryptocurrency selection from top trading pairs
 
 Technical Analysis Display:

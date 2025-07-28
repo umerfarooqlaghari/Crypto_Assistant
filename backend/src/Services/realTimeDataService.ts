@@ -68,7 +68,7 @@ export class RealTimeDataService {
       this.subscriptions.set(socket.id, {
         socketId: socket.id,
         symbols: new Set(),
-        timeframes: new Set(['1m', '15m', '30m', '4h'])
+        timeframes: new Set(['1m', '5m', '15m', '4h'])
       });
 
       // Handle symbol subscription

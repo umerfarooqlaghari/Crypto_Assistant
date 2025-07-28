@@ -12,6 +12,10 @@ export interface SignalResult {
   priceAction?: PriceActionAnalysis;
   riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
   timestamp: string;
+  // Additional properties for enhanced analysis
+  chartPatterns?: any[];
+  candlestickPatterns?: any[];
+  currentPrice?: number;
 }
 
 export interface PriceActionAnalysis {
@@ -29,7 +33,9 @@ export interface MultiTimeframeSignal {
   };
   overallSignal: 'BUY' | 'SELL' | 'HOLD';
   overallConfidence: number;
+  overallStrength?: number; // Overall strength across timeframes
   consensus: number; // Percentage of timeframes agreeing
+  currentPrice?: number; // Current price for the symbol
 }
 
 export class SignalAnalysisService {
@@ -230,7 +236,7 @@ export class SignalAnalysisService {
   async generateMultiTimeframeSignals(
     exchange: string,
     symbol: string,
-    timeframes: string[] = ['15m', '1h', '4h', '1d']
+    timeframes: string[] = ['1m', '15m', '1h', '4h']
   ): Promise<MultiTimeframeSignal> {
     try {
       logDebug(`Generating multi-timeframe signals for ${symbol}`, { timeframes });

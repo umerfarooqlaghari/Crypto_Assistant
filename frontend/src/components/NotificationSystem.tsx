@@ -146,7 +146,10 @@ export default function NotificationSystem({
       }
     }
 
-    // Don't auto-remove notifications - they persist until page refresh or manual removal
+    // Auto-hide toast notification after 10 seconds
+    setTimeout(() => {
+      removeNotification(notification.id);
+    }, 10000);
   };
 
   const removeNotification = (id: string) => {

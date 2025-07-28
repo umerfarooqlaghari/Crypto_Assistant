@@ -12,9 +12,9 @@ export interface CoinListItem {
   volume: number;
   marketCap?: number;
   confidence: {
+    '1m': ConfidenceSignal;
     '5m': ConfidenceSignal;
     '15m': ConfidenceSignal;
-    '30m': ConfidenceSignal;
     '1h': ConfidenceSignal;
     '4h': ConfidenceSignal;
     '1d': ConfidenceSignal;
@@ -51,7 +51,7 @@ export class CoinListService {
   };
 
   // Timeframes for technical analysis
-  private readonly TIMEFRAMES = ['5m', '15m', '30m', '1h', '4h', '1d'];
+  private readonly TIMEFRAMES = ['1m', '5m', '15m', '1h', '4h', '1d'];
 
   // Top 50 established coins by volume and market cap (no new/small coins)
   private readonly ESTABLISHED_COINS = [
@@ -279,9 +279,9 @@ export class CoinListService {
         volume: parseFloat(ticker.volume),
         marketCap: undefined,
         confidence: {
+          '1m': { action: 'HOLD' as const, confidence: 50, strength: 25, color: 'yellow' as const },
           '5m': { action: 'HOLD' as const, confidence: 50, strength: 25, color: 'yellow' as const },
           '15m': { action: 'HOLD' as const, confidence: 50, strength: 25, color: 'yellow' as const },
-          '30m': { action: 'HOLD' as const, confidence: 50, strength: 25, color: 'yellow' as const },
           '1h': { action: 'HOLD' as const, confidence: 50, strength: 25, color: 'yellow' as const },
           '4h': { action: 'HOLD' as const, confidence: 50, strength: 25, color: 'yellow' as const },
           '1d': { action: 'HOLD' as const, confidence: 50, strength: 25, color: 'yellow' as const }
@@ -460,9 +460,9 @@ export class CoinListService {
   // Generate confidence signals for real-time processing using WebSocket cached data
   private async generateRealTimeConfidenceSignals(symbol: string): Promise<CoinListItem['confidence']> {
     const confidence: CoinListItem['confidence'] = {
+      '1m': { action: 'HOLD', confidence: 50, strength: 25, color: 'yellow' },
       '5m': { action: 'HOLD', confidence: 50, strength: 25, color: 'yellow' },
       '15m': { action: 'HOLD', confidence: 50, strength: 25, color: 'yellow' },
-      '30m': { action: 'HOLD', confidence: 50, strength: 25, color: 'yellow' },
       '1h': { action: 'HOLD', confidence: 50, strength: 25, color: 'yellow' },
       '4h': { action: 'HOLD', confidence: 50, strength: 25, color: 'yellow' },
       '1d': { action: 'HOLD', confidence: 50, strength: 25, color: 'yellow' }

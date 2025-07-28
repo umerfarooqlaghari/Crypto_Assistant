@@ -21,7 +21,7 @@ A full-stack cryptocurrency trading assistant with real-time signals, technical 
 - Confidence scoring (0-100%)
 - Entry/exit points
 - Stop loss and take profit levels
-- Multi-timeframe analysis (1m, 15m, 30m, 4h)
+- Multi-timeframe analysis (1m, 5m, 15m, 4h)
 
 ### 🎨 **Professional UI**
 - Real-time price updates

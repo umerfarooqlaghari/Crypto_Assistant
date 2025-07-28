@@ -186,6 +186,26 @@ export const createNotificationRule = async (req: Request, res: Response): Promi
       throw new ExchangeError('Rule name is required', 'validation');
     }
 
+    // Validate specificTimeframes if provided
+    if (ruleData.specificTimeframes) {
+      if (!Array.isArray(ruleData.specificTimeframes)) {
+        throw new ExchangeError('specificTimeframes must be an array', 'validation');
+      }
+
+      const validTimeframes = ['1m', '3m', '5m', '15m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M'];
+      const invalidTimeframes = ruleData.specificTimeframes.filter((tf: string) => !validTimeframes.includes(tf));
+
+      if (invalidTimeframes.length > 0) {
+        throw new ExchangeError(`Invalid timeframes: ${invalidTimeframes.join(', ')}`, 'validation');
+      }
+
+      // Check for duplicates
+      const uniqueTimeframes = [...new Set(ruleData.specificTimeframes)];
+      if (uniqueTimeframes.length !== ruleData.specificTimeframes.length) {
+        throw new ExchangeError('Duplicate timeframes are not allowed', 'validation');
+      }
+    }
+
     const rule = await prismaService.createNotificationRule(ruleData);
 
     logInfo(`Notification rule created: ${ruleData.name}`);
@@ -207,6 +227,26 @@ export const updateNotificationRule = async (req: Request, res: Response): Promi
   try {
     const { id } = req.params;
     const updateData = req.body;
+
+    // Validate specificTimeframes if provided
+    if (updateData.specificTimeframes) {
+      if (!Array.isArray(updateData.specificTimeframes)) {
+        throw new ExchangeError('specificTimeframes must be an array', 'validation');
+      }
+
+      const validTimeframes = ['1m', '3m', '5m', '15m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M'];
+      const invalidTimeframes = updateData.specificTimeframes.filter((tf: string) => !validTimeframes.includes(tf));
+
+      if (invalidTimeframes.length > 0) {
+        throw new ExchangeError(`Invalid timeframes: ${invalidTimeframes.join(', ')}`, 'validation');
+      }
+
+      // Check for duplicates
+      const uniqueTimeframes = [...new Set(updateData.specificTimeframes)];
+      if (uniqueTimeframes.length !== updateData.specificTimeframes.length) {
+        throw new ExchangeError('Duplicate timeframes are not allowed', 'validation');
+      }
+    }
 
     const rule = await prismaService.updateNotificationRule(id, updateData);
 
@@ -242,6 +282,40 @@ export const deleteNotificationRule = async (req: Request, res: Response): Promi
     res.status(500).json({
       success: false,
       error: 'Failed to delete notification rule'
+    });
+  }
+};
+
+export const checkNotificationRules = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { coins } = req.body;
+
+    if (!coins || !Array.isArray(coins)) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid coins data provided'
+      });
+      return;
+    }
+
+    logInfo(`Checking notification rules against ${coins.length} coins`);
+
+    // Import the notification rule checker
+    const { notificationRuleChecker } = await import('../Services/notificationRuleChecker');
+
+    // Check rules against the provided coins
+    await notificationRuleChecker.checkRulesAgainstCoins(coins);
+
+    res.json({
+      success: true,
+      message: `Notification rules checked against ${coins.length} coins`,
+      timestamp: Date.now()
+    });
+  } catch (error) {
+    logError('Error checking notification rules', error as Error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to check notification rules'
     });
   }
 };

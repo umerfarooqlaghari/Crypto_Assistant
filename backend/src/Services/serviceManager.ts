@@ -57,7 +57,7 @@ class ServiceManager {
         'ENJUSDT', 'MKRUSDT', 'SNXUSDT', 'GRTUSDT', 'LRCUSDT', 'BATUSDT', 'COMPUSDT', 'YFIUSDT', 'SUSHIUSDT', 'CRVUSDT'
       ];
 
-      const TIMEFRAMES = ['5m', '15m', '30m', '1h', '4h', '1d'];
+      const TIMEFRAMES = ['1m', '5m', '15m', '1h', '4h', '1d'];
 
       await (this._binanceService as any).preSubscribeToKlineData(ESTABLISHED_COINS, TIMEFRAMES);
 

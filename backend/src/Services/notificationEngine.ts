@@ -242,7 +242,15 @@ export class NotificationEngine {
         strength: signal.strength,
         timeframe,
         hasVisual: rule.enableVisual,
-        ruleId: rule.id
+        ruleId: rule.id,
+        // Store technical analysis data directly
+        technicalIndicators: signal.technicalIndicators || undefined,
+        chartPatterns: signal.chartPatterns || undefined,
+        candlestickPatterns: signal.candlestickPatterns || undefined,
+        triggeredTimeframes: [timeframe], // Single timeframe notification
+        analysisReasoning: signal.reasoning || undefined,
+        currentPrice: signal.currentPrice || undefined,
+        exchange: 'binance'
       };
 
       // Save to database
@@ -296,6 +304,13 @@ export class NotificationEngine {
       const title = `Multi-Timeframe ${multiSignal.overallSignal}: ${symbol}`;
       const message = `${multiSignal.overallSignal} consensus across ${multiSignal.consensusCount} timeframes for ${symbol} with ${overallConfidencePercent.toFixed(1)}% overall confidence`;
 
+      // Aggregate technical analysis data from all timeframes
+      const aggregatedTechnicalIndicators = this.aggregateTechnicalIndicators(multiSignal);
+      const aggregatedChartPatterns = this.aggregateChartPatterns(multiSignal);
+      const aggregatedCandlestickPatterns = this.aggregateCandlestickPatterns(multiSignal);
+      const aggregatedReasoning = this.aggregateReasoning(multiSignal);
+      const triggeredTimeframes = Object.keys(multiSignal.timeframes);
+
       const notificationData = {
         title,
         message,
@@ -304,10 +319,18 @@ export class NotificationEngine {
         symbol,
         signal: multiSignal.overallSignal,
         confidence: overallConfidencePercent,
-        strength: 0, // Multi-timeframe doesn't have single strength value
+        strength: multiSignal.overallStrength || 0,
         timeframe: 'multi',
         hasVisual: rule.enableVisual,
-        ruleId: rule.id
+        ruleId: rule.id,
+        // Store aggregated technical analysis data
+        technicalIndicators: aggregatedTechnicalIndicators,
+        chartPatterns: aggregatedChartPatterns,
+        candlestickPatterns: aggregatedCandlestickPatterns,
+        triggeredTimeframes: triggeredTimeframes,
+        analysisReasoning: aggregatedReasoning,
+        currentPrice: multiSignal.currentPrice || undefined,
+        exchange: 'binance'
       };
 
       const savedNotification = await prismaService.createNotification(notificationData);
@@ -377,6 +400,80 @@ export class NotificationEngine {
       isActive: remainingMs > 0,
       remainingMs
     };
+  }
+
+  // Helper methods for aggregating multi-timeframe data
+  private aggregateTechnicalIndicators(multiSignal: EnhancedMultiTimeframeSignal): any {
+    const aggregated: any = {};
+    const timeframes = Object.keys(multiSignal.timeframes);
+
+    timeframes.forEach(tf => {
+      const signal = multiSignal.timeframes[tf];
+      if (signal.technicalIndicators) {
+        Object.keys(signal.technicalIndicators).forEach(indicator => {
+          if (!aggregated[indicator]) {
+            aggregated[indicator] = {};
+          }
+          aggregated[indicator][tf] = (signal.technicalIndicators as any)[indicator];
+        });
+      }
+    });
+
+    return Object.keys(aggregated).length > 0 ? aggregated : undefined;
+  }
+
+  private aggregateChartPatterns(multiSignal: EnhancedMultiTimeframeSignal): any[] | undefined {
+    const allPatterns: any[] = [];
+    const timeframes = Object.keys(multiSignal.timeframes);
+
+    timeframes.forEach(tf => {
+      const signal = multiSignal.timeframes[tf];
+      if (signal.chartPatterns && Array.isArray(signal.chartPatterns)) {
+        signal.chartPatterns.forEach((pattern: any) => {
+          allPatterns.push({
+            ...pattern,
+            timeframe: tf
+          });
+        });
+      }
+    });
+
+    return allPatterns.length > 0 ? allPatterns : undefined;
+  }
+
+  private aggregateCandlestickPatterns(multiSignal: EnhancedMultiTimeframeSignal): any[] | undefined {
+    const allPatterns: any[] = [];
+    const timeframes = Object.keys(multiSignal.timeframes);
+
+    timeframes.forEach(tf => {
+      const signal = multiSignal.timeframes[tf];
+      if (signal.candlestickPatterns && Array.isArray(signal.candlestickPatterns)) {
+        signal.candlestickPatterns.forEach((pattern: any) => {
+          allPatterns.push({
+            ...pattern,
+            timeframe: tf
+          });
+        });
+      }
+    });
+
+    return allPatterns.length > 0 ? allPatterns : undefined;
+  }
+
+  private aggregateReasoning(multiSignal: EnhancedMultiTimeframeSignal): string[] | undefined {
+    const allReasoning: string[] = [];
+    const timeframes = Object.keys(multiSignal.timeframes);
+
+    timeframes.forEach(tf => {
+      const signal = multiSignal.timeframes[tf];
+      if (signal.reasoning && Array.isArray(signal.reasoning)) {
+        signal.reasoning.forEach(reason => {
+          allReasoning.push(`${tf}: ${reason}`);
+        });
+      }
+    });
+
+    return allReasoning.length > 0 ? allReasoning : undefined;
   }
 }
 

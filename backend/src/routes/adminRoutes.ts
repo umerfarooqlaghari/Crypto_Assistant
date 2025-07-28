@@ -68,7 +68,8 @@ router.get('/notification-rules/:id', asyncHandler(adminController.getNotificati
  * @body description - Rule description (optional)
  * @body minConfidence - Minimum confidence threshold (optional)
  * @body minStrength - Minimum strength threshold (optional)
- * @body requiredTimeframes - Required number of agreeing timeframes (optional)
+ * @body requiredTimeframes - Required number of agreeing timeframes (optional, deprecated)
+ * @body specificTimeframes - Array of specific timeframes to check (e.g., ["1m", "5m", "1h"]) (optional)
  * @body requiredSignalType - Required signal type ('BUY', 'SELL', 'HOLD') (optional)
  * @body advancedConditions - Advanced rule conditions in JSON format (optional)
  * @body enableSound - Enable sound notifications (default: true)
@@ -94,6 +95,14 @@ router.put('/notification-rules/:id', asyncHandler(adminController.updateNotific
  * @returns Success message
  */
 router.delete('/notification-rules/:id', asyncHandler(adminController.deleteNotificationRule));
+
+/**
+ * @route POST /api/admin/notification-rules/check
+ * @description Check notification rules against provided coin data
+ * @body coins - Array of coin data to check against rules
+ * @returns Result of rule checking process
+ */
+router.post('/notification-rules/check', asyncHandler(adminController.checkNotificationRules));
 
 // System Management Routes
 /**
