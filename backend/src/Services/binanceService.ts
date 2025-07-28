@@ -55,8 +55,11 @@ export class BinanceService {
   private cacheHits = 0;
   private restApiCalls = 0; // Track REST API calls for monitoring
 
+  // Tracked symbols for selective WebSocket streams
+  private trackedSymbols: Set<string> = new Set();
+
   constructor() {
-    this.initializeAllTickersStream();
+    this.initializeSelectiveTickersStream();
   }
 
   // Subscribe to kline data for a specific symbol and timeframe
@@ -574,88 +577,127 @@ export class BinanceService {
     };
   }
 
-  // Initialize WebSocket connection for ALL market tickers (WebSocket-only approach)
-  private initializeAllTickersStream() {
-    logInfo('Initializing Binance WebSocket ALL market tickers stream (WebSocket-only approach)');
+  // Initialize WebSocket connection for selective symbol streams (optimized approach)
+  private initializeSelectiveTickersStream() {
+    logInfo('Initializing Binance WebSocket selective symbol streams (bandwidth optimized)');
 
-    // Subscribe to ALL market tickers stream - this replaces all REST API calls
-    this.subscribeToAllMarketTickers();
+    // Initialize with empty set - symbols will be added dynamically
+    this.trackedSymbols = new Set();
   }
 
+  // Add symbols to be tracked via WebSocket streams
+  public addTrackedSymbols(symbols: string[]): void {
+    const newSymbols: string[] = [];
 
+    symbols.forEach(symbol => {
+      if (!this.trackedSymbols.has(symbol)) {
+        this.trackedSymbols.add(symbol);
+        newSymbols.push(symbol);
+      }
+    });
 
-  // Subscribe to ALL market tickers stream (replaces REST API calls)
-  private subscribeToAllMarketTickers() {
-    const wsUrl = `${this.wsBaseURL}/!ticker@arr`;
+    if (newSymbols.length > 0) {
+      logInfo(`Adding ${newSymbols.length} new symbols to WebSocket tracking: ${newSymbols.join(', ')}`);
+      this.subscribeToSelectiveSymbols(newSymbols);
+    }
+  }
+
+  // Subscribe to selective symbols using individual streams for reliability
+  private subscribeToSelectiveSymbols(symbols: string[]): void {
+    logInfo(`Setting up individual ticker streams for ${symbols.length} symbols`);
+
+    // Create individual ticker streams for each symbol to avoid URL length issues
+    symbols.forEach((symbol, index) => {
+      // Add small delay between connections to avoid rate limiting
+      setTimeout(() => {
+        this.createIndividualTickerStream(symbol);
+      }, index * 50); // 50ms delay between each connection
+    });
+  }
+
+  // Create individual ticker stream for a single symbol
+  private createIndividualTickerStream(symbol: string): void {
+    const streamName = `${symbol.toLowerCase()}@ticker`;
+    const wsUrl = `${this.wsBaseURL}/ws/${streamName}`;
+    const connectionKey = `ticker_${symbol}`;
+
+    // Don't create duplicate connections
+    if (this.wsConnections.has(connectionKey)) {
+      return;
+    }
+
     const ws = new WebSocket(wsUrl);
 
     ws.on('open', () => {
-      logInfo('Connected to Binance ALL market tickers WebSocket stream');
-      this.isAllTickersConnected = true;
+      logInfo(`Connected to ticker stream for ${symbol}`);
+      this.isAllTickersConnected = true; // Mark as connected for compatibility
     });
 
     ws.on('message', (data: WebSocket.Data) => {
       try {
-        const tickers = JSON.parse(data.toString());
+        const ticker = JSON.parse(data.toString());
 
-        // Process each ticker in the array
-        if (Array.isArray(tickers)) {
-          const filteredTickers: BinanceTicker[] = [];
+        // Handle individual ticker stream format (direct ticker data)
+        if (ticker.s && ticker.s.endsWith('USDT') &&
+            !ticker.s.includes('UP') &&
+            !ticker.s.includes('DOWN') &&
+            !ticker.s.includes('BULL') &&
+            !ticker.s.includes('BEAR')) {
 
-          tickers.forEach((ticker: any) => {
-            // Filter for USDT pairs and exclude leveraged tokens
-            if (ticker.s.endsWith('USDT') &&
-                !ticker.s.includes('UP') &&
-                !ticker.s.includes('DOWN') &&
-                !ticker.s.includes('BULL') &&
-                !ticker.s.includes('BEAR')) {
+          const tickerData: BinanceTicker = {
+            symbol: ticker.s,
+            price: ticker.c,
+            priceChangePercent: ticker.P,
+            volume: ticker.v,
+            high: ticker.h,
+            low: ticker.l
+          };
 
-              const tickerData: BinanceTicker = {
-                symbol: ticker.s,
-                price: ticker.c,
-                priceChangePercent: ticker.P,
-                volume: ticker.v,
-                high: ticker.h,
-                low: ticker.l
-              };
+          // Update cache
+          this.allTickersCache.set(ticker.s, tickerData);
 
-              // Update cache
-              this.allTickersCache.set(ticker.s, tickerData);
-              filteredTickers.push(tickerData);
+          // Notify individual symbol subscribers
+          this.notifySubscribers(ticker.s, tickerData);
 
-              // Notify individual symbol subscribers
-              this.notifySubscribers(ticker.s, tickerData);
-            }
-          });
-
-          // Notify all tickers subscribers with filtered data
-          this.allTickersSubscribers.forEach(callback => {
-            try {
-              callback(filteredTickers);
-            } catch (error) {
-              logError('Error in all tickers callback', error as Error);
-            }
-          });
-
-          logDebug(`Processed ${filteredTickers.length} USDT ticker updates from all market stream`);
+          // Notify all-tickers subscribers (for compatibility)
+          this.notifyAllTickersSubscribers();
         }
       } catch (error) {
-        logError('Error parsing all market tickers WebSocket message', error as Error);
+        logError(`Error parsing ticker WebSocket message for ${symbol}`, error as Error);
       }
     });
 
     ws.on('error', (error) => {
-      logError('Binance all market tickers WebSocket error', error);
-      this.isAllTickersConnected = false;
+      logError(`Ticker WebSocket error for ${symbol}`, error);
     });
 
     ws.on('close', () => {
-      logInfo('Binance all market tickers WebSocket connection closed, attempting to reconnect...');
-      this.isAllTickersConnected = false;
-      setTimeout(() => this.subscribeToAllMarketTickers(), 5000);
+      logInfo(`Ticker WebSocket connection closed for ${symbol}, attempting to reconnect...`);
+      this.wsConnections.delete(connectionKey);
+
+      // Reconnect after 5 seconds
+      setTimeout(() => {
+        if (!this.wsConnections.has(connectionKey)) {
+          this.createIndividualTickerStream(symbol);
+        }
+      }, 5000);
     });
 
-    this.wsConnections.set('allTickers', ws);
+    this.wsConnections.set(connectionKey, ws);
+  }
+
+  // Notify all-tickers subscribers with current cached data
+  private notifyAllTickersSubscribers(): void {
+    if (this.allTickersSubscribers.size > 0) {
+      const cachedTickers = Array.from(this.allTickersCache.values());
+      this.allTickersSubscribers.forEach(callback => {
+        try {
+          callback(cachedTickers);
+        } catch (error) {
+          logError('Error in all-tickers subscriber callback', error as Error);
+        }
+      });
+    }
   }
 
   // Subscribe to individual symbol ticker

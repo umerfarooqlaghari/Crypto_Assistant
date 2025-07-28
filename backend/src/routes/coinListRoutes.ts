@@ -5,10 +5,19 @@ import {
   refreshCoinList,
   getCoinListStats,
   getCoinListPerformance,
-  resetCoinListPerformance
+  resetCoinListPerformance,
+  getTop50CoinList,
+  clearCoinList
 } from '../controllers/coinListController';
 
 const router = Router();
+
+/**
+ * @route GET /api/coin-list/top50
+ * @description Get top 50 coins dynamically from Binance WebSocket (called when user visits coin-list page)
+ * @returns Array of top 50 coins with confidence signals for multiple timeframes
+ */
+router.get('/top50', getTop50CoinList);
 
 /**
  * @route GET /api/coin-list
@@ -85,5 +94,12 @@ router.get('/performance', getCoinListPerformance);
  * @returns Success confirmation
  */
 router.post('/performance/reset', resetCoinListPerformance);
+
+/**
+ * @route POST /api/coin-list/clear
+ * @description Clear current coin list (called when user navigates away)
+ * @returns Success confirmation
+ */
+router.post('/clear', clearCoinList);
 
 export default router;

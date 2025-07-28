@@ -3,6 +3,18 @@ import { AdvancedTechnicalAnalysis } from './advancedTechnicalAnalysis';
 import { serviceManager } from './serviceManager';
 import { logDebug, logError, logInfo } from '../utils/logger';
 import { notificationRuleChecker } from './notificationRuleChecker';
+import { SUPPORTED_TIMEFRAMES } from '../config/coinConfig';
+
+// Essential coins that should always be included in the top 50 list
+const ESSENTIAL_COINS = [
+  'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT', 'SOLUSDT',
+  'DOGEUSDT', 'TRXUSDT', 'DOTUSDT', 'LTCUSDT', 'AVAXUSDT', 'LINKUSDT'
+];
+
+// Cache for coin list to avoid refetching on every request
+let cachedCoinList: CoinListItem[] = [];
+let cacheTimestamp: number = 0;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes cache
 
 export interface CoinListItem {
   symbol: string;
@@ -38,7 +50,7 @@ export class CoinListService {
   private realTimeUpdateInterval: NodeJS.Timeout | null = null;
   private isProcessingRealTimeData = false;
   private currentCoinList: CoinListItem[] = [];
-  private readonly REAL_TIME_UPDATE_INTERVAL = 5 * 1000; // 5 seconds for real-time updates
+  private readonly REAL_TIME_UPDATE_INTERVAL = 15 * 1000; // 15 seconds for optimized real-time updates
 
   // Performance tracking (simplified for WebSocket-only approach)
   private performanceStats = {
@@ -53,31 +65,7 @@ export class CoinListService {
   // Timeframes for technical analysis
   private readonly TIMEFRAMES = ['1m', '5m', '15m', '1h', '4h', '1d'];
 
-  // Top 50 established coins by volume and market cap (no new/small coins)
-  private readonly ESTABLISHED_COINS = [
-    // Top 10 by market cap
-    'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT', 'SOLUSDT', 'DOGEUSDT', 'TRXUSDT', 'DOTUSDT', 'POLUSDT',
-    // Top 20 established altcoins
-    'LTCUSDT', 'SHIBUSDT', 'AVAXUSDT', 'UNIUSDT', 'LINKUSDT', 'ATOMUSDT', 'XLMUSDT', 'VETUSDT', 'FILUSDT', 'ICPUSDT',
-    // Top 30 DeFi and Layer 2
-    'ETCUSDT', 'NEARUSDT', 'ALGOUSDT', 'MANAUSDT', 'SANDUSDT', 'CROUSDT', 'APEUSDT', 'LDOUSDT', 'OPUSDT', 'ARBUSDT',
-    // Top 40 established projects
-    'TONUSDT', 'FETUSDT', 'ENSUSDT', 'GRTUSDT', 'MKRUSDT', 'AAVEUSDT', 'COMPUSDT', 'SNXUSDT', 'YFIUSDT', 'SUSHIUSDT',
-    // Top 50 established coins
-    'CAKEUSDT', 'CHZUSDT', 'ENJUSDT', 'BATUSDT', 'ZRXUSDT', 'OMGUSDT', 'LRCUSDT', 'RLCUSDT', 'STORJUSDT', 'BANDUSDT'
-  ];
-
-  // Coins to exclude (new, unstable, stablecoins, wrapped tokens)
-  private readonly EXCLUDED_COINS = [
-    // New/unstable coins
-    'SAHARAUSDT', 'ERAUSDT', 'CUSDT', 'LAUSDT', 'NEWTUSDT', 'RESOLVUSDT',
-    // Stablecoins
-    'FDUSDUSDT', 'USDCUSDT', 'TUSDUSDT', 'BUSDUSDT', 'DAIUSDT', 'USDPUSDT',
-    // Wrapped tokens
-    'WBTCUSDT', 'WETHUSDT', 'STETHUSDT', 'WBNBUSDT',
-    // Test/demo coins
-    'TESTUSDT', 'DEMOUSDT'
-  ];
+  // Using centralized coin configuration
 
   constructor() {
     // Use shared services from ServiceManager to ensure WebSocket subscriptions are shared
@@ -91,7 +79,51 @@ export class CoinListService {
 
 
 
-  // Get coin list with confidence indicators (WebSocket-only approach)
+  // Get top 50 coins dynamically from WebSocket (called when user visits coin-list page)
+  async getTop50CoinList(): Promise<CoinListItem[]> {
+    const startTime = Date.now();
+
+    try {
+      // Check cache first
+      const now = Date.now();
+      if (cachedCoinList.length > 0 && (now - cacheTimestamp) < CACHE_DURATION) {
+        logInfo(`📦 Returning cached coin list (${cachedCoinList.length} coins, age: ${Math.round((now - cacheTimestamp) / 1000)}s)`);
+        return cachedCoinList;
+      }
+
+      logInfo('🔄 Fetching fresh top 50 coins from Binance WebSocket');
+
+      // Get fresh top 50 coins with their ticker data directly from WebSocket
+      const coinList = await this.generateTop50CoinListFromWebSocket();
+
+      // Always ensure BTC and ETH are included with separate WebSocket calls
+      const guaranteedCoinList = await this.ensureBTCETHIncluded(coinList);
+
+      // Subscribe to WebSocket streams for the fetched coins (only if not already subscribed)
+      const symbols = guaranteedCoinList.map(coin => coin.symbol);
+      await this.subscribeToCoins(symbols);
+
+      // Cache the results
+      cachedCoinList = guaranteedCoinList;
+      cacheTimestamp = now;
+
+      // Update performance stats
+      const duration = Date.now() - startTime;
+      this.performanceStats.averageResponseTime =
+        (this.performanceStats.averageResponseTime + duration) / 2;
+      this.performanceStats.lastUpdate = Date.now();
+
+      logInfo(`✅ Generated and cached coin list for ${guaranteedCoinList.length} coins in ${duration}ms`);
+      return guaranteedCoinList;
+
+    } catch (error) {
+      this.performanceStats.errorCount++;
+      logError('Error getting top 50 coin list', error as Error);
+      throw error;
+    }
+  }
+
+  // Legacy method - Get coin list with confidence indicators (WebSocket-only approach)
   async getCoinList(limit: number = 50): Promise<CoinListItem[]> {
     const startTime = Date.now();
 
@@ -162,21 +194,24 @@ export class CoinListService {
       // Sort coins by volume
       const sortedCoins = coinListItems.sort((a, b) => b.volume - a.volume);
 
+      // Ensure BTC and ETH are always included in real-time updates too
+      const guaranteedCoins = await this.ensureBTCETHIncluded(sortedCoins);
+
       // Update current coin list for real-time updates
-      this.currentCoinList = sortedCoins;
-      this.performanceStats.activeCoinCount = sortedCoins.length;
+      this.currentCoinList = guaranteedCoins;
+      this.performanceStats.activeCoinCount = guaranteedCoins.length;
 
       // Check notification rules against the updated coin list
       setImmediate(async () => {
         try {
-          await notificationRuleChecker.checkRulesAgainstCoins(sortedCoins);
+          await notificationRuleChecker.checkRulesAgainstCoins(guaranteedCoins);
         } catch (error) {
           logError('Error checking notification rules', error as Error);
         }
       });
 
-      logInfo(`Successfully generated ${sortedCoins.length} coins for real-time coin list`);
-      return sortedCoins;
+      logInfo(`Successfully generated ${guaranteedCoins.length} coins for real-time coin list (including guaranteed BTC/ETH)`);
+      return guaranteedCoins;
     } catch (error) {
       logError('Error generating real-time coin list', error as Error);
       throw error;
@@ -185,21 +220,12 @@ export class CoinListService {
 
   // Filter and prioritize coins to get top 50 established coins by volume
   private filterAndPrioritizeCoins(allTickers: any[], limit: number) {
-    // Filter out excluded coins and only include established coins or high-volume coins
+    // Filter out excluded coins and only include high-volume coins
     const validTickers = allTickers.filter(ticker => {
-      // Exclude problematic/new coins
-      if (this.EXCLUDED_COINS.includes(ticker.symbol)) {
-        return false;
-      }
-
-      // Include established coins
-      if (this.ESTABLISHED_COINS.includes(ticker.symbol)) {
-        return true;
-      }
-
-      // For other coins, only include if they have high volume and are valid
+      // Use local validation logic (avoid async call in filter)
       const volumeUSD = parseFloat(ticker.volume) * parseFloat(ticker.price);
-      return volumeUSD > 10000000 && this.isValidCoin(ticker); // $10M+ volume
+      return volumeUSD > 10000000 && // $10M+ volume
+             this.isValidCoin(ticker);
     });
 
     // Sort by volume (USD value) - highest first
@@ -245,7 +271,159 @@ export class CoinListService {
     return !problematicPatterns.some(pattern => pattern.test(symbol));
   }
 
+  // Generate top 50 coin list directly from WebSocket (bypasses cache limitations)
+  private async generateTop50CoinListFromWebSocket(): Promise<CoinListItem[]> {
+    return new Promise((resolve, reject) => {
+      logInfo('🔄 Connecting to Binance WebSocket for top 50 coins...');
 
+      const WebSocket = require('ws');
+      const ws = new WebSocket('wss://stream.binance.com:9443/ws/!ticker@arr');
+      let dataReceived = false;
+
+      // Set timeout to avoid hanging
+      const timeout = setTimeout(() => {
+        if (!dataReceived) {
+          logError('WebSocket timeout for top 50 coins');
+          ws.close();
+          reject(new Error('WebSocket timeout'));
+        }
+      }, 15000); // 15 second timeout
+
+      ws.on('open', () => {
+        logInfo('Connected to Binance WebSocket for top 50 coins');
+      });
+
+      ws.on('message', async (data: Buffer) => {
+        try {
+          const tickers = JSON.parse(data.toString());
+
+          if (Array.isArray(tickers) && tickers.length > 0) {
+            dataReceived = true;
+            clearTimeout(timeout);
+
+            // Filter for USDT pairs and sort by quote volume
+            const allUsdtPairs = tickers
+              .filter((ticker: any) =>
+                ticker.s.endsWith('USDT') &&
+                this.isValidCoin({ symbol: ticker.s, volume: ticker.v, price: ticker.c }) &&
+                parseFloat(ticker.q) > 1000000 // Min $1M quote volume
+              )
+              .sort((a: any, b: any) => parseFloat(b.q) - parseFloat(a.q)); // Sort by quote volume desc
+
+            // Ensure essential coins are always included
+            const essentialTickers = tickers.filter((ticker: any) =>
+              ESSENTIAL_COINS.includes(ticker.s) &&
+              this.isValidCoin({ symbol: ticker.s, volume: ticker.v, price: ticker.c })
+            );
+
+            // Find missing essential coins that weren't in the WebSocket data
+            const foundEssentialSymbols = essentialTickers.map((t: any) => t.s);
+            const missingEssentialCoins = ESSENTIAL_COINS.filter(symbol => !foundEssentialSymbols.includes(symbol));
+
+            // Add missing essential coins from the full ticker data (with relaxed volume requirements)
+            const missingEssentialTickers = tickers.filter((ticker: any) =>
+              missingEssentialCoins.includes(ticker.s) &&
+              ticker.s.endsWith('USDT') &&
+              parseFloat(ticker.c) > 0 // Just ensure price is valid
+            );
+
+            // Combine essential coins (found + missing) with top volume coins
+            const allEssentialTickers = [...essentialTickers, ...missingEssentialTickers];
+            const combinedPairs = [...allEssentialTickers];
+            const essentialSymbols = allEssentialTickers.map((t: any) => t.s);
+
+            // Add remaining high-volume coins
+            for (const ticker of allUsdtPairs) {
+              if (!essentialSymbols.includes(ticker.s) && combinedPairs.length < 50) {
+                combinedPairs.push(ticker);
+              }
+            }
+
+            const usdtPairs = combinedPairs.slice(0, 50); // Ensure we have exactly 50
+
+            logInfo(`📊 Processing ${usdtPairs.length} top coins from WebSocket (${allEssentialTickers.length} essential coins included)...`);
+            logInfo(`🔥 Essential coins found: ${foundEssentialSymbols.join(', ')}`);
+            if (missingEssentialCoins.length > 0) {
+              logInfo(`⚠️ Essential coins missing from high-volume data: ${missingEssentialCoins.join(', ')}`);
+              logInfo(`✅ Added missing essential coins: ${missingEssentialTickers.map((t: any) => t.s).join(', ')}`);
+            }
+
+            // Convert to CoinListItem format
+            const coinList: CoinListItem[] = [];
+
+            for (const ticker of usdtPairs) {
+              try {
+                const coinItem = await this.convertWebSocketTickerToCoinItem(ticker);
+                if (coinItem) {
+                  coinList.push(coinItem);
+                }
+              } catch (error) {
+                logError(`Error processing ${ticker.s}:`, error as Error);
+              }
+            }
+
+            logInfo(`✅ Successfully processed ${coinList.length} coins from WebSocket`);
+            ws.close();
+            resolve(coinList);
+          }
+        } catch (error) {
+          logError('Error parsing WebSocket data:', error as Error);
+          clearTimeout(timeout);
+          ws.close();
+          reject(error);
+        }
+      });
+
+      ws.on('error', (error: Error) => {
+        logError('WebSocket error:', error);
+        clearTimeout(timeout);
+        reject(error);
+      });
+
+      ws.on('close', () => {
+        logInfo('WebSocket connection closed');
+      });
+    });
+  }
+
+  // Generate coin list for specific symbols (used by top 50 fetcher)
+  private async generateCoinListForSymbols(symbols: string[]): Promise<CoinListItem[]> {
+    const coinList: CoinListItem[] = [];
+
+    logInfo(`🔄 Generating analysis for ${symbols.length} symbols...`);
+
+    // Get all tickers from cache
+    const allTickers = this.binanceService.getAllTickersFromCache();
+    const tickerMap = new Map(allTickers.map(ticker => [ticker.symbol, ticker]));
+
+    for (const symbol of symbols) {
+      try {
+        // Get ticker data from WebSocket cache
+        const tickerData = tickerMap.get(symbol);
+
+        if (tickerData) {
+          const coinItem = await this.processRealTimeCoinItem(tickerData);
+          if (coinItem) {
+            coinList.push(coinItem);
+          }
+        } else {
+          logDebug(`No ticker data available for ${symbol}`);
+        }
+      } catch (error) {
+        logError(`Error processing ${symbol}:`, error as Error);
+      }
+    }
+
+    // Sort by volume (USD value) - highest first (same as existing logic)
+    coinList.sort((a, b) => {
+      const aVolumeUSD = a.volume * a.price;
+      const bVolumeUSD = b.volume * b.price;
+      return bVolumeUSD - aVolumeUSD;
+    });
+
+    logInfo(`✅ Successfully generated analysis for ${coinList.length}/${symbols.length} symbols`);
+    return coinList;
+  }
 
   // Process individual coin item using real-time WebSocket data (optimized for real-time)
   private async processRealTimeCoinItem(ticker: BinanceTicker): Promise<CoinListItem | null> {
@@ -363,14 +541,14 @@ export class CoinListService {
       this.processRealTimeTickerUpdates(tickers);
     });
 
-    // Start periodic confidence updates every 5 seconds
+    // Start periodic confidence updates every 15 seconds
     this.realTimeUpdateInterval = setInterval(async () => {
       if (!this.isProcessingRealTimeData && this.currentCoinList.length > 0) {
         await this.updateRealTimeConfidenceSignals();
       }
     }, this.REAL_TIME_UPDATE_INTERVAL);
 
-    logInfo('Started WebSocket-only real-time updates (5-second confidence updates, instant price updates)');
+    logInfo('Started WebSocket-only real-time updates (15-second confidence updates, instant price updates)');
   }
 
   // Process real-time ticker updates from WebSocket
@@ -559,10 +737,96 @@ export class CoinListService {
     return this.currentCoinList;
   }
 
+  // Ensure BTC and ETH are always included with separate WebSocket calls
+  private async ensureBTCETHIncluded(coinList: CoinListItem[]): Promise<CoinListItem[]> {
+    try {
+      const requiredCoins = ['BTCUSDT', 'ETHUSDT'];
+      const existingSymbols = coinList.map((coin: CoinListItem) => coin.symbol);
+      const missingCoins = requiredCoins.filter(symbol => !existingSymbols.includes(symbol));
+
+      if (missingCoins.length === 0) {
+        logInfo('✅ BTC and ETH already included in coin list');
+        return coinList;
+      }
+
+      logInfo(`🔍 Adding missing essential coins: ${missingCoins.join(', ')}`);
+
+      // Make separate WebSocket calls for missing BTC/ETH
+      const additionalCoins: CoinListItem[] = [];
+
+      for (const symbol of missingCoins) {
+        try {
+          // Get ticker data from Binance WebSocket cache
+          let tickerData = this.binanceService.getCachedPrice(symbol);
+
+          // If not in cache, try to get via REST API as fallback
+          if (!tickerData) {
+            logInfo(`${symbol} not in WebSocket cache, fetching via REST API`);
+            tickerData = await this.binanceService.getTicker24hr(symbol);
+          }
+
+          if (tickerData && parseFloat(tickerData.price) > 0) {
+            // Generate confidence data for this coin using existing method
+            const confidence = await this.generateRealTimeConfidenceSignals(symbol);
+
+            const coinItem: CoinListItem = {
+              symbol: symbol,
+              name: symbol.replace('USDT', ''),
+              price: parseFloat(tickerData.price),
+              priceChange24h: parseFloat(tickerData.priceChangePercent),
+              volume: parseFloat(tickerData.volume),
+              confidence: confidence,
+              lastUpdated: Date.now()
+            };
+
+            additionalCoins.push(coinItem);
+            logInfo(`✅ Added ${symbol} via separate call (price: $${tickerData.price})`);
+          }
+        } catch (error) {
+          logError(`❌ Failed to fetch ${symbol} via separate call:`, error as Error);
+        }
+      }
+
+      // Combine original list with additional coins, ensuring we don't exceed 50
+      const combinedList = [...additionalCoins, ...coinList];
+      return combinedList.slice(0, 50);
+
+    } catch (error) {
+      logError('❌ Error ensuring BTC/ETH inclusion:', error as Error);
+      return coinList;
+    }
+  }
+
+  // Subscribe to WebSocket streams for the given coins (with caching-aware logic)
+  private async subscribeToCoins(symbols: string[]): Promise<void> {
+    try {
+      logInfo(`🔌 Subscribing to WebSocket streams for ${symbols.length} coins...`);
+
+      const binanceService = serviceManager.getBinanceService();
+
+      // Add tracked symbols to Binance service
+      binanceService.addTrackedSymbols(symbols);
+
+      // Pre-subscribe to kline data for all timeframes
+      await (binanceService as any).preSubscribeToKlineData(symbols, SUPPORTED_TIMEFRAMES);
+
+      logInfo(`✅ Successfully subscribed to WebSocket streams for ${symbols.length} coins`);
+    } catch (error) {
+      logError('Failed to subscribe to WebSocket streams for coins', error as Error);
+    }
+  }
+
   // Clear current coin list
   clearCurrentCoinList() {
     this.currentCoinList = [];
     logInfo('Cleared current coin list');
+  }
+
+  // Clear cached coin list (force refresh)
+  clearCachedCoinList() {
+    cachedCoinList = [];
+    cacheTimestamp = 0;
+    logInfo('Cleared cached coin list - next request will fetch fresh data');
   }
 
   // Get performance statistics
@@ -591,5 +855,34 @@ export class CoinListService {
   setRealTimeService(realTimeService: any) {
     this.realTimeService = realTimeService;
     logInfo('Real-time service connected to coin list service');
+  }
+
+  // Convert WebSocket ticker data to CoinListItem
+  private async convertWebSocketTickerToCoinItem(ticker: any): Promise<CoinListItem | null> {
+    try {
+      const symbol = ticker.s;
+      const price = parseFloat(ticker.c);
+      const priceChange24h = parseFloat(ticker.P);
+      const volume = parseFloat(ticker.v);
+
+      // Get coin name from symbol (remove USDT)
+      const coinName = symbol.replace('USDT', '');
+
+      // Generate confidence signals for all timeframes
+      const confidence = await this.generateRealTimeConfidenceSignals(symbol);
+
+      return {
+        symbol,
+        name: coinName,
+        price,
+        priceChange24h,
+        volume,
+        confidence,
+        lastUpdated: Date.now()
+      };
+    } catch (error) {
+      logError(`Error converting ticker ${ticker.s} to coin item:`, error as Error);
+      return null;
+    }
   }
 }

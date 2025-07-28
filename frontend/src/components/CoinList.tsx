@@ -96,38 +96,25 @@ export default function CoinList() {
     }
   };
 
-  // Fetch coin list data
+  // Fetch coin list data - ALWAYS fetches fresh data from WebSocket (no caching)
   const fetchCoinList = async (refresh = false) => {
     try {
       if (refresh) setRefreshing(true);
       else setLoading(true);
 
-      let coinsResponse, statsResponse;
-
-      if (refresh) {
-        // Use POST for refresh endpoint
-        [coinsResponse, statsResponse] = await Promise.all([
-          fetch(getApiUrl(`${API_CONFIG.ENDPOINTS.COIN_LIST}/refresh?limit=50`), {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          }),
-          fetch(getApiUrl(API_CONFIG.ENDPOINTS.COIN_LIST_STATS))
-        ]);
-      } else {
-        // Use GET for normal fetch
-        [coinsResponse, statsResponse] = await Promise.all([
-          fetch(getApiUrl(`${API_CONFIG.ENDPOINTS.COIN_LIST}?limit=50`)),
-          fetch(getApiUrl(API_CONFIG.ENDPOINTS.COIN_LIST_STATS))
-        ]);
-      }
+      // Always use top50 endpoint which fetches fresh data from Binance WebSocket
+      // This ensures every page visit gets the latest top 50 coins by volume
+      const [coinsResponse, statsResponse] = await Promise.all([
+        fetch(getApiUrl(`${API_CONFIG.ENDPOINTS.COIN_LIST}/top50`)),
+        fetch(getApiUrl(API_CONFIG.ENDPOINTS.COIN_LIST_STATS))
+      ]);
 
       if (coinsResponse.ok && statsResponse.ok) {
         const coinsData = await coinsResponse.json();
         const statsData = await statsResponse.json();
 
-        console.log('📊 Fetched coin list data:', coinsData.data?.length || 0, 'coins');
+        console.log('� Fetched coin list data:', coinsData.data?.length || 0, 'coins');
+
         setCoins(coinsData.data || []);
         setStats(statsData.data || null);
         setLastUpdate(new Date());
@@ -155,15 +142,15 @@ export default function CoinList() {
     console.log('🔔 Starting notification cron job...');
     setNotificationCronActive(true);
 
-    // Check notification rules every 15 seconds
+    // Check notification rules every 30 seconds
     const cronInterval = setInterval(async () => {
       try {
         // Get current coins data from ref (always up-to-date)
         const currentCoins = coinsRef.current;
 
-        // Only run if we have coins data
+        // Only run if we have coins data (stops checking when user navigates away)
         if (currentCoins.length === 0) {
-          console.log('🔔 Notification cron: Waiting for coin data... (current coins length:', currentCoins.length, ')');
+          console.log('🔔 Notification cron: No coins loaded - skipping rule check (user may have navigated away)');
           return;
         }
 
@@ -197,7 +184,7 @@ export default function CoinList() {
       } catch (error) {
         console.error('🔔 Notification cron: Error checking rules', error);
       }
-    }, 15000); // Check every 15 seconds
+    }, 30000); // Check every 30 seconds
 
     // Store interval ID for cleanup
     return () => {
@@ -261,13 +248,14 @@ export default function CoinList() {
 
 
     return () => {
+      console.log('🔌 CoinList component unmounting - closing WebSocket connection');
       newSocket.close();
     };
   }, []);
 
   // Initial load and periodic status checks
   useEffect(() => {
-    console.log('🚀 CoinList component mounted, fetching initial coin list...');
+    console.log('🚀 CoinList component mounted - fetching fresh top 50 coins from WebSocket...');
     fetchCoinList();
     checkServiceStatus();
 
@@ -276,7 +264,10 @@ export default function CoinList() {
       checkServiceStatus();
     }, 30000); // 30 seconds
 
-    return () => clearInterval(statusInterval);
+    return () => {
+      console.log('🔄 CoinList component unmounting - clearing status check interval');
+      clearInterval(statusInterval);
+    };
   }, []);
 
   // Notification cron job useEffect - starts once when component mounts
@@ -294,12 +285,16 @@ export default function CoinList() {
     }
 
     return () => {
+      console.log('🔔 CoinList component unmounting - cleaning up notification cron job');
       if (startTimer) {
         clearTimeout(startTimer);
       }
       if (cronCleanup) {
         cronCleanup();
       }
+      // Clear coins data when component unmounts
+      setCoins([]);
+      setNotificationCronActive(false);
     };
   }, []); // Remove dependencies to prevent loop
 
@@ -355,7 +350,7 @@ export default function CoinList() {
 
       // Check if any timeframe has the target signal
       const timeframes = ['1m', '5m', '15m', '1h', '4h', '1d'] as const;
-      return timeframes.some(tf => coin.confidence[tf].action === filterSignal);
+      return timeframes.some(tf => coin.confidence[tf]?.action === filterSignal);
     })
     .sort((a: CoinListItem, b: CoinListItem) => {
       // Smart sorting based on confidence and strength
@@ -366,6 +361,8 @@ export default function CoinList() {
       // Sort by score descending (highest scores first)
       return scoreB - scoreA;
     });
+
+
 
   // Format price
   const formatPrice = (price: number) => {

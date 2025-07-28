@@ -25,6 +25,36 @@ export const getCoinListService = (): CoinListService => {
   return coinListService;
 };
 
+// Get top 50 coins dynamically from WebSocket (called when user visits coin-list page)
+export const getTop50CoinList = async (req: Request, res: Response): Promise<void> => {
+  try {
+    logInfo('📊 API call: GET /api/coin-list/top50 - Fetching top 50 coins from WebSocket');
+
+    const service = getCoinListService();
+    const coinList = await service.getTop50CoinList();
+
+    logInfo(`✅ Successfully returned ${coinList.length} top coins from WebSocket`);
+
+    res.status(200).json({
+      success: true,
+      data: coinList,
+      metadata: {
+        count: coinList.length,
+        source: 'binance_websocket',
+        timestamp: Date.now(),
+        description: 'Top 50 coins by volume from Binance WebSocket'
+      }
+    });
+  } catch (error) {
+    logError('Error in getTop50CoinList controller:', error as Error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch top 50 coin list',
+      details: (error as Error).message
+    });
+  }
+};
+
 // Get coin list with confidence indicators
 export const getCoinList = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -246,6 +276,28 @@ export const resetCoinListPerformance = async (req: Request, res: Response): Pro
     logError('Error in resetCoinListPerformance controller', error as Error);
     res.status(500).json({
       error: 'Failed to reset performance statistics',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+};
+
+// Clear current coin list (called when user navigates away)
+export const clearCoinList = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const service = getCoinListService();
+    service.clearCurrentCoinList();
+
+    logInfo('Cleared current coin list - user navigated away from coin-list page');
+
+    res.status(200).json({
+      success: true,
+      message: 'Current coin list cleared successfully',
+      timestamp: Date.now()
+    });
+  } catch (error) {
+    logError('Error clearing current coin list', error as Error);
+    res.status(500).json({
+      error: 'Failed to clear current coin list',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }

@@ -3,6 +3,8 @@ import { AdvancedTechnicalAnalysis } from './advancedTechnicalAnalysis';
 import { CoinGeckoService } from './coinGeckoService';
 import { logInfo, logError } from '../utils/logger';
 
+// No pre-subscription at startup - coins will be subscribed only when user visits coin-list page
+
 /**
  * Service Manager - Singleton pattern to ensure all parts of the application
  * use the same WebSocket-enabled service instances
@@ -43,23 +45,8 @@ class ServiceManager {
       // Create CoinGeckoService
       this._coinGeckoService = new CoinGeckoService();
 
-      // Pre-subscribe to kline data for established coins and timeframes
-      const ESTABLISHED_COINS = [
-        // Top 10 by market cap
-        'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT', 'SOLUSDT', 'DOGEUSDT', 'TRXUSDT', 'DOTUSDT', 'POLUSDT',
-        // Top 20 by market cap
-        'AVAXUSDT', 'SHIBUSDT', 'LINKUSDT', 'MATICUSDT', 'LTCUSDT', 'UNIUSDT', 'ATOMUSDT', 'ETCUSDT', 'XLMUSDT', 'BCHUSDT',
-        // Top 30 by market cap
-        'FILUSDT', 'APTUSDT', 'NEARUSDT', 'VETUSDT', 'ICPUSDT', 'ALGOUSDT', 'QNTUSDT', 'HBARUSDT', 'EGLDUSDT', 'SANDUSDT',
-        // Top 40 by market cap
-        'MANAUSDT', 'AXSUSDT', 'THETAUSDT', 'FLOWUSDT', 'XTZUSDT', 'AAVEUSDT', 'EOSUSDT', 'KLAYUSDT', 'CHZUSDT', 'GALAUSDT',
-        // Top 50 by market cap
-        'ENJUSDT', 'MKRUSDT', 'SNXUSDT', 'GRTUSDT', 'LRCUSDT', 'BATUSDT', 'COMPUSDT', 'YFIUSDT', 'SUSHIUSDT', 'CRVUSDT'
-      ];
-
-      const TIMEFRAMES = ['1m', '5m', '15m', '1h', '4h', '1d'];
-
-      await (this._binanceService as any).preSubscribeToKlineData(ESTABLISHED_COINS, TIMEFRAMES);
+      // No pre-subscription at startup - WebSocket streams will be created dynamically
+      // when user visits coin-list page and fresh top 50 coins are fetched
 
       this._initialized = true;
       logInfo('Successfully initialized shared services with WebSocket support');
