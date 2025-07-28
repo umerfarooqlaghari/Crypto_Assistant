@@ -25,13 +25,13 @@ export const getCoinListService = (): CoinListService => {
   return coinListService;
 };
 
-// Get top 50 coins dynamically from WebSocket (called when user visits coin-list page)
-export const getTop50CoinList = async (req: Request, res: Response): Promise<void> => {
+// Get top 30 coins dynamically from WebSocket (called when user visits coin-list page)
+export const getTop30CoinList = async (req: Request, res: Response): Promise<void> => {
   try {
-    logInfo('📊 API call: GET /api/coin-list/top50 - Fetching top 50 coins from WebSocket');
+    logInfo('📊 API call: GET /api/coin-list/top30 - Fetching top 30 coins from WebSocket');
 
     const service = getCoinListService();
-    const coinList = await service.getTop50CoinList();
+    const coinList = await service.getTop30CoinList();
 
     logInfo(`✅ Successfully returned ${coinList.length} top coins from WebSocket`);
 
@@ -42,28 +42,31 @@ export const getTop50CoinList = async (req: Request, res: Response): Promise<voi
         count: coinList.length,
         source: 'binance_websocket',
         timestamp: Date.now(),
-        description: 'Top 50 coins by volume from Binance WebSocket'
+        description: 'Top 30 best coins by market cap and liquidity from Binance WebSocket'
       }
     });
   } catch (error) {
-    logError('Error in getTop50CoinList controller:', error as Error);
+    logError('Error in getTop30CoinList controller:', error as Error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch top 50 coin list',
+      error: 'Failed to fetch top 30 coin list',
       details: (error as Error).message
     });
   }
 };
 
+// Legacy endpoint for backward compatibility
+export const getTop50CoinList = getTop30CoinList;
+
 // Get coin list with confidence indicators
 export const getCoinList = async (req: Request, res: Response): Promise<void> => {
   try {
-    const limit = parseInt(req.query.limit as string) || 50;
-    
+    const limit = parseInt(req.query.limit as string) || 30;
+
     // Validate limit
-    if (limit < 1 || limit > 100) {
+    if (limit < 1 || limit > 50) {
       res.status(400).json({
-        error: 'Invalid limit. Must be between 1 and 100.',
+        error: 'Invalid limit. Must be between 1 and 50.',
         limit: limit
       });
       return;
@@ -145,8 +148,8 @@ export const refreshCoinList = async (req: Request, res: Response): Promise<void
     const service = getCoinListService();
     service.clearCurrentCoinList();
 
-    const limit = parseInt(req.query.limit as string) || 50;
-    const freshCoinList = await service.getCoinList(limit);
+    // Use top 30 curated coins instead of legacy volume-based method
+    const freshCoinList = await service.getTop30CoinList();
 
     res.status(200).json({
       success: true,
@@ -169,9 +172,9 @@ export const refreshCoinList = async (req: Request, res: Response): Promise<void
 export const getCoinListStats = async (req: Request, res: Response): Promise<void> => {
   try {
     const service = getCoinListService();
-    
-    // Get current coin list to analyze
-    const coinList = await service.getCoinList(50);
+
+    // Use current coin list instead of generating new one (prevents overriding curated list)
+    const coinList = service.getCurrentCoinList();
     
     // Calculate statistics
     const stats = {

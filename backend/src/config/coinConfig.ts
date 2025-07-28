@@ -4,103 +4,42 @@
  * Top 50 coins are fetched dynamically from Binance WebSocket when needed
  */
 
-import WebSocket from 'ws';
 
-// Fallback coins in case WebSocket fails (most reliable major cryptocurrencies)
-const FALLBACK_COINS = [
-  'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT', 'SOLUSDT', 'DOGEUSDT', 'TRXUSDT', 'DOTUSDT', 'LTCUSDT',
-  'SHIBUSDT', 'AVAXUSDT', 'UNIUSDT', 'LINKUSDT', 'ATOMUSDT', 'XLMUSDT', 'VETUSDT', 'FILUSDT', 'ICPUSDT', 'ETCUSDT'
+
+// Top 30 best cryptocurrencies by market cap and established reputation
+// These are the most reliable, liquid, and established coins in the crypto market
+const TOP_30_BEST_COINS = [
+  // Top 10 - Most established and liquid
+  'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'XRPUSDT', 'SOLUSDT', 'ADAUSDT', 'DOGEUSDT', 'TRXUSDT', 'AVAXUSDT', 'LINKUSDT',
+
+  // Top 11-20 - Major altcoins with strong fundamentals
+  'DOTUSDT', 'MATICUSDT', 'LTCUSDT', 'SHIBUSDT', 'UNIUSDT', 'ATOMUSDT', 'XLMUSDT', 'VETUSDT', 'FILUSDT', 'ICPUSDT',
+
+  // Top 21-30 - Established projects with good liquidity
+  'ETCUSDT', 'NEARUSDT', 'ALGOUSDT', 'MANAUSDT', 'SANDUSDT', 'AXSUSDT', 'FLOWUSDT', 'EGLDUSDT', 'XTZUSDT', 'CHZUSDT'
 ];
 
-// No caching - always fetch fresh data
 
-// Interface for Binance WebSocket ticker data
-interface BinanceWSTickerData {
-  e: string;      // Event type
-  E: number;      // Event time
-  s: string;      // Symbol
-  c: string;      // Close price
-  o: string;      // Open price
-  h: string;      // High price
-  l: string;      // Low price
-  v: string;      // Total traded base asset volume
-  q: string;      // Total traded quote asset volume
-  O: number;      // Statistics open time
-  C: number;      // Statistics close time
-  F: number;      // First trade ID
-  L: number;      // Last trade ID
-  n: number;      // Total number of trades
-}
 
-// Fetch top 50 coins from Binance WebSocket (called only when user visits coin-list page)
-// Always fetches fresh data - no caching
-export function fetchTop50CoinsFromWebSocket(): Promise<string[]> {
-  return new Promise((resolve, reject) => {
-    console.log('Fetching fresh top 50 coins from Binance WebSocket...');
+// Get top 30 best coins directly from curated list (eliminates all-tickers stream)
+// This removes the massive bandwidth consumption from the !ticker@arr stream
+export function fetchTop30CoinsFromWebSocket(): Promise<string[]> {
+  return new Promise((resolve) => {
+    console.log('Using curated top 30 best coins (no all-tickers stream needed)...');
 
-    const ws = new WebSocket('wss://stream.binance.com:9443/ws/!ticker@arr');
-    let dataReceived = false;
+    // Return our curated list directly - these are already the best established coins
+    // Individual ticker streams will validate availability when they connect
+    const selectedCoins = TOP_30_BEST_COINS.slice(0, 30);
 
-    // Set timeout to avoid hanging
-    const timeout = setTimeout(() => {
-      if (!dataReceived) {
-        console.log('WebSocket timeout, using fallback coins');
-        ws.close();
-        resolve(FALLBACK_COINS);
-      }
-    }, 10000); // 10 second timeout
+    console.log(`✅ Selected ${selectedCoins.length} coins from curated list`);
+    console.log('Coins:', selectedCoins.join(', '));
 
-    ws.on('open', () => {
-      console.log('Connected to Binance WebSocket for top coins fetch');
-    });
-
-    ws.on('message', (data: Buffer) => {
-      try {
-        const tickers: BinanceWSTickerData[] = JSON.parse(data.toString());
-
-        if (Array.isArray(tickers) && tickers.length > 0) {
-          dataReceived = true;
-          clearTimeout(timeout);
-
-          // Filter for USDT pairs and sort by quote volume
-          const usdtPairs = tickers
-            .filter(ticker =>
-              ticker.s.endsWith('USDT') &&
-              !isSymbolExcluded(ticker.s) &&
-              parseFloat(ticker.q) > 1000000 // Min $1M quote volume (reduced from $10M)
-            )
-            .sort((a, b) => parseFloat(b.q) - parseFloat(a.q)) // Sort by quote volume desc
-            .slice(0, 50) // Top 50
-            .map(ticker => ticker.s);
-
-          console.log(`Successfully fetched top ${usdtPairs.length} coins from WebSocket`);
-          ws.close();
-          resolve(usdtPairs);
-        }
-      } catch (error) {
-        console.error('Error parsing WebSocket data:', error);
-        clearTimeout(timeout);
-        ws.close();
-        resolve(FALLBACK_COINS);
-      }
-    });
-
-    ws.on('error', (error) => {
-      console.error('WebSocket error:', error);
-      clearTimeout(timeout);
-      resolve(FALLBACK_COINS);
-    });
-
-    ws.on('close', () => {
-      console.log('WebSocket connection closed');
-    });
+    // Resolve immediately - no WebSocket needed, eliminates all-tickers bandwidth usage
+    resolve(selectedCoins);
   });
 }
 
-// Helper function to check if symbol should be excluded
-function isSymbolExcluded(symbol: string): boolean {
-  return EXCLUDED_COINS.includes(symbol);
-}
+
 
 // Coins to exclude (new, unstable, stablecoins, wrapped tokens)
 export const EXCLUDED_COINS = [
@@ -128,9 +67,9 @@ export const EXCLUDED_COINS = [
 // Supported timeframes for analysis
 export const SUPPORTED_TIMEFRAMES = ['1m', '5m', '15m', '1h', '4h', '1d'];
 
-// Get all coins that should be tracked (top 50 from WebSocket)
+// Get all coins that should be tracked (top 30 from WebSocket)
 export async function getAllTrackedCoins(): Promise<string[]> {
-  const topCoins = await fetchTop50CoinsFromWebSocket();
+  const topCoins = await fetchTop30CoinsFromWebSocket();
   return [...topCoins];
 }
 
@@ -141,7 +80,7 @@ export function isCoinExcluded(symbol: string): boolean {
 
 // Check if a coin is in the top coins list
 export async function isTopCoin(symbol: string): Promise<boolean> {
-  const topCoins = await fetchTop50CoinsFromWebSocket();
+  const topCoins = await fetchTop30CoinsFromWebSocket();
   return topCoins.includes(symbol);
 }
 
@@ -173,7 +112,7 @@ export async function isValidCoinForTracking(symbol: string, volume?: number, pr
 
 // Get configuration summary
 export async function getCoinConfigSummary() {
-  const topCoins = await fetchTop50CoinsFromWebSocket();
+  const topCoins = await fetchTop30CoinsFromWebSocket();
   const trackedCoins = await getAllTrackedCoins();
 
   return {

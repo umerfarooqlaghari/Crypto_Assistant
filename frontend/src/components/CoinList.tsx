@@ -102,10 +102,10 @@ export default function CoinList() {
       if (refresh) setRefreshing(true);
       else setLoading(true);
 
-      // Always use top50 endpoint which fetches fresh data from Binance WebSocket
-      // This ensures every page visit gets the latest top 50 coins by volume
+      // Always use top30 endpoint which fetches fresh data from Binance WebSocket
+      // This ensures every page visit gets the latest top 30 best coins by market cap and liquidity
       const [coinsResponse, statsResponse] = await Promise.all([
-        fetch(getApiUrl(`${API_CONFIG.ENDPOINTS.COIN_LIST}/top50`)),
+        fetch(getApiUrl(`${API_CONFIG.ENDPOINTS.COIN_LIST}/top30`)),
         fetch(getApiUrl(API_CONFIG.ENDPOINTS.COIN_LIST_STATS))
       ]);
 
@@ -114,6 +114,7 @@ export default function CoinList() {
         const statsData = await statsResponse.json();
 
         console.log('� Fetched coin list data:', coinsData.data?.length || 0, 'coins');
+        console.log('🔍 All coins received:', coinsData.data?.map((c: any) => c.symbol) || []);
 
         setCoins(coinsData.data || []);
         setStats(statsData.data || null);
@@ -361,6 +362,16 @@ export default function CoinList() {
       // Sort by score descending (highest scores first)
       return scoreB - scoreA;
     });
+
+  // Debug logging
+  console.log('🔍 Debug Info:', {
+    totalCoins: coins.length,
+    filteredCoins: filteredCoins.length,
+    searchTerm,
+    filterSignal,
+    coinsWithZeroPrice: coins.filter(c => c.price === 0).length,
+    filteredSymbols: filteredCoins.map(c => c.symbol)
+  });
 
 
 

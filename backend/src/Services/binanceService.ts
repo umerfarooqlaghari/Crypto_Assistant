@@ -49,7 +49,7 @@ export class BinanceService {
   private klineCache: Map<string, number[][]> = new Map(); // key: symbol_timeframe, value: OHLCV array
   private klineSubscribers: Map<string, Set<(ohlcv: number[][]) => void>> = new Map();
   private klineConnections: Map<string, WebSocket> = new Map();
-  private readonly MAX_KLINE_BUFFER = 200; // Keep 200 candles in buffer
+  private readonly MAX_KLINE_BUFFER = 75; // Keep 75 candles in buffer (reduced from 200 for bandwidth optimization)
 
   // Track API usage statistics
   private cacheHits = 0;
@@ -60,6 +60,7 @@ export class BinanceService {
 
   constructor() {
     this.initializeSelectiveTickersStream();
+    this.initializeCuratedCoinsStreams();
   }
 
   // Subscribe to kline data for a specific symbol and timeframe
@@ -583,6 +584,24 @@ export class BinanceService {
 
     // Initialize with empty set - symbols will be added dynamically
     this.trackedSymbols = new Set();
+  }
+
+  // Initialize individual ticker streams for all curated coins (eliminates all-tickers stream)
+  private async initializeCuratedCoinsStreams() {
+    try {
+      // Import the curated coins list
+      const { fetchTop30CoinsFromWebSocket } = await import('../config/coinConfig');
+      const curatedCoins = await fetchTop30CoinsFromWebSocket();
+
+      logInfo(`🚀 Initializing individual ticker streams for ${curatedCoins.length} curated coins (eliminates all-tickers bandwidth)`);
+
+      // Add all curated coins to tracking and create individual streams
+      this.addTrackedSymbols(curatedCoins);
+
+      logInfo(`✅ Successfully set up individual ticker streams for all ${curatedCoins.length} curated coins`);
+    } catch (error) {
+      logError('Failed to initialize curated coins streams', error as Error);
+    }
   }
 
   // Add symbols to be tracked via WebSocket streams

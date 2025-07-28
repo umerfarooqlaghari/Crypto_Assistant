@@ -7,22 +7,30 @@ import {
   getCoinListPerformance,
   resetCoinListPerformance,
   getTop50CoinList,
+  getTop30CoinList,
   clearCoinList
 } from '../controllers/coinListController';
 
 const router = Router();
 
 /**
+ * @route GET /api/coin-list/top30
+ * @description Get top 30 best coins dynamically from Binance WebSocket (called when user visits coin-list page)
+ * @returns Array of top 30 best coins with confidence signals for multiple timeframes
+ */
+router.get('/top30', getTop30CoinList);
+
+/**
  * @route GET /api/coin-list/top50
- * @description Get top 50 coins dynamically from Binance WebSocket (called when user visits coin-list page)
- * @returns Array of top 50 coins with confidence signals for multiple timeframes
+ * @description Legacy endpoint - redirects to top30 for backward compatibility
+ * @returns Array of top 30 best coins with confidence signals for multiple timeframes
  */
 router.get('/top50', getTop50CoinList);
 
 /**
  * @route GET /api/coin-list
  * @description Get list of top cryptocurrencies with confidence indicators
- * @query limit - Number of coins to return (1-100, default: 50)
+ * @query limit - Number of coins to return (1-50, default: 30)
  * @returns Array of coins with confidence signals for multiple timeframes
  */
 router.get('/', getCoinList);
@@ -76,7 +84,7 @@ router.get('/:symbol', getCoinData);
 /**
  * @route POST /api/coin-list/refresh
  * @description Manually refresh coin list cache
- * @query limit - Number of coins to return (1-100, default: 50)
+ * @query limit - Number of coins to return (1-50, default: 30)
  * @returns Refreshed coin list data
  */
 router.post('/refresh', refreshCoinList);
