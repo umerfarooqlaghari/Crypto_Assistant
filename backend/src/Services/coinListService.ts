@@ -2,7 +2,7 @@ import { BinanceService, BinanceTicker } from './binanceService';
 import { AdvancedTechnicalAnalysis } from './advancedTechnicalAnalysis';
 import { serviceManager } from './serviceManager';
 import { logDebug, logError, logInfo } from '../utils/logger';
-import { notificationRuleChecker } from './notificationRuleChecker';
+
 import { SUPPORTED_TIMEFRAMES, fetchTop30CoinsFromWebSocket } from '../config/coinConfig';
 
 
@@ -45,7 +45,11 @@ export class CoinListService {
   private realTimeUpdateInterval: NodeJS.Timeout | null = null;
   private isProcessingRealTimeData = false;
   private currentCoinList: CoinListItem[] = [];
-  private readonly REAL_TIME_UPDATE_INTERVAL = 15 * 1000; // 15 seconds for optimized real-time updates
+  private readonly REAL_TIME_UPDATE_INTERVAL = 30 * 1000; // 30 seconds for coin list updates
+
+  // Throttling for price update broadcasts
+  private lastPriceBroadcastTime = 0;
+  private readonly PRICE_BROADCAST_THROTTLE = 30 * 1000; // 30 seconds throttle for price broadcasts
 
   // Performance tracking (simplified for WebSocket-only approach)
   private performanceStats = {
@@ -94,13 +98,16 @@ export class CoinListService {
       // Always ensure BTC and ETH are included with separate WebSocket calls
       const guaranteedCoinList = await this.ensureBTCETHIncluded(coinList);
 
-      // Subscribe to WebSocket streams for the fetched coins (only if not already subscribed)
+      // Subscribe to WebSocket streams for the fetched coins using combined streams
       const symbols = guaranteedCoinList.map(coin => coin.symbol);
       await this.subscribeToCoins(symbols);
 
-      // Update current coin list for real-time updates (ensures WebSocket broadcasts all 30 coins)
+      // Update current coin list for real-time updates and setup individual subscriptions
       this.currentCoinList = guaranteedCoinList;
       this.performanceStats.activeCoinCount = guaranteedCoinList.length;
+
+      // Setup individual price subscriptions for each coin in the list
+      this.setupIndividualCoinSubscriptions(symbols);
 
       // Cache the results
       cachedCoinList = guaranteedCoinList;
@@ -138,8 +145,8 @@ export class CoinListService {
         }
       }
 
-      // Get fresh data from WebSocket cache
-      const result = await this.generateRealTimeCoinList(limit);
+      // Get fresh data using the fixed TOP_30_BEST_COINS list
+      const result = await this.generateTop30CoinListFromWebSocket();
 
       // Update performance stats
       const duration = Date.now() - startTime;
@@ -155,120 +162,9 @@ export class CoinListService {
     }
   }
 
-  // Generate real-time coin list from WebSocket data
-  private async generateRealTimeCoinList(limit: number): Promise<CoinListItem[]> {
-    logInfo(`Generating real-time coin list for top ${limit} coins from WebSocket data`);
 
-    try {
-      // Get all tickers from WebSocket cache
-      const allTickers = this.binanceService.getAllTickersFromCache();
 
-      if (allTickers.length === 0) {
-        throw new Error('No ticker data available from WebSocket');
-      }
 
-      // Filter and prioritize coins
-      const filteredTickers = this.filterAndPrioritizeCoins(allTickers, limit);
-
-      // Process coins in parallel to calculate confidence signals
-      const coinListItems: CoinListItem[] = [];
-      const batchSize = 10; // Larger batch size since no API rate limits
-
-      for (let i = 0; i < filteredTickers.length; i += batchSize) {
-        const batch = filteredTickers.slice(i, i + batchSize);
-        const batchPromises = batch.map(ticker => this.processRealTimeCoinItem(ticker));
-
-        const batchResults = await Promise.allSettled(batchPromises);
-
-        batchResults.forEach((result, index) => {
-          if (result.status === 'fulfilled' && result.value) {
-            coinListItems.push(result.value);
-          } else {
-            logDebug(`Failed to process coin ${batch[index].symbol}`,
-              result.status === 'rejected' ? result.reason : new Error('Unknown error'));
-          }
-        });
-      }
-
-      // Sort coins by volume
-      const sortedCoins = coinListItems.sort((a, b) => b.volume - a.volume);
-
-      // Ensure BTC and ETH are always included in real-time updates too
-      const guaranteedCoins = await this.ensureBTCETHIncluded(sortedCoins);
-
-      // Update current coin list for real-time updates
-      this.currentCoinList = guaranteedCoins;
-      this.performanceStats.activeCoinCount = guaranteedCoins.length;
-
-      // Check notification rules against the updated coin list
-      setImmediate(async () => {
-        try {
-          await notificationRuleChecker.checkRulesAgainstCoins(guaranteedCoins);
-        } catch (error) {
-          logError('Error checking notification rules', error as Error);
-        }
-      });
-
-      logInfo(`Successfully generated ${guaranteedCoins.length} coins for real-time coin list (including guaranteed BTC/ETH)`);
-      return guaranteedCoins;
-    } catch (error) {
-      logError('Error generating real-time coin list', error as Error);
-      throw error;
-    }
-  }
-
-  // Filter and prioritize coins to get top established coins by volume
-  private filterAndPrioritizeCoins(allTickers: any[], limit: number) {
-    // Filter out excluded coins and only include high-volume coins
-    const validTickers = allTickers.filter(ticker => {
-      // Use local validation logic (avoid async call in filter)
-      const volumeUSD = parseFloat(ticker.volume) * parseFloat(ticker.price);
-      return volumeUSD > 10000000 && // $10M+ volume
-             this.isValidCoin(ticker);
-    });
-
-    // Sort by volume (USD value) - highest first
-    validTickers.sort((a, b) => {
-      const aVolumeUSD = parseFloat(a.volume) * parseFloat(a.price);
-      const bVolumeUSD = parseFloat(b.volume) * parseFloat(b.price);
-      return bVolumeUSD - aVolumeUSD;
-    });
-
-    // Take top coins by volume (up to limit)
-    const result = validTickers.slice(0, limit);
-    logInfo(`Selected top ${result.length} established coins by volume (excluded ${allTickers.length - validTickers.length} coins)`);
-
-    return result;
-  }
-
-  // Check if a coin is valid for analysis
-  private isValidCoin(ticker: any): boolean {
-    const symbol = ticker.symbol;
-    const volume = parseFloat(ticker.volume);
-    const price = parseFloat(ticker.price);
-
-    // Filter out low volume coins
-    if (volume < 1000000) return false; // Minimum 1M volume
-
-    // Filter out very low price coins (likely to have insufficient data)
-    if (price < 0.000001) return false;
-
-    // Filter out leveraged tokens and other derivatives
-    if (symbol.includes('UP') || symbol.includes('DOWN') ||
-        symbol.includes('BULL') || symbol.includes('BEAR') ||
-        symbol.includes('HEDGE') || symbol.includes('HALF')) {
-      return false;
-    }
-
-    // Filter out some problematic meme coins and new tokens that often lack data
-    const problematicPatterns = [
-      /^\d+.*USDT$/, // Tokens starting with numbers (like 1000SATS)
-      /^1MB.*USDT$/, // 1MB tokens
-      /BONK|PEPE|FLOKI|SHIB|DOGE(?!USDT$)|MEME|BTTC|LUNC|NEIRO|DOGS|HMSTR|PENGU|BOME|LEVER|WIN|SPK|SPELL|SLP/i
-    ];
-
-    return !problematicPatterns.some(pattern => pattern.test(symbol));
-  }
 
   // Generate top 30 coin list from curated list (eliminates all-tickers WebSocket)
   private async generateTop30CoinListFromWebSocket(): Promise<CoinListItem[]> {
@@ -283,10 +179,8 @@ export class CoinListService {
       // Process each symbol to create CoinListItem with technical analysis
       const coinListPromises = top30Symbols.map(async (symbol: string) => {
         try {
-          // Subscribe to individual ticker stream for this symbol
-          this.binanceService.subscribeToPrice(symbol, () => {
-            // Individual ticker callback - data will be cached automatically
-          });
+          // Individual subscriptions will be handled by setupIndividualCoinSubscriptions
+          // No need to subscribe here as combined streams are already active
 
           // Wait a moment for individual stream to connect and populate cache
           await new Promise(resolve => setTimeout(resolve, 100));
@@ -345,131 +239,11 @@ export class CoinListService {
     };
   }
 
-  // Generate coin list for specific symbols (used by top 50 fetcher)
-  private async generateCoinListForSymbols(symbols: string[]): Promise<CoinListItem[]> {
-    const coinList: CoinListItem[] = [];
 
-    logInfo(`🔄 Generating analysis for ${symbols.length} symbols...`);
 
-    // Get all tickers from cache
-    const allTickers = this.binanceService.getAllTickersFromCache();
-    const tickerMap = new Map(allTickers.map(ticker => [ticker.symbol, ticker]));
 
-    for (const symbol of symbols) {
-      try {
-        // Get ticker data from WebSocket cache
-        const tickerData = tickerMap.get(symbol);
 
-        if (tickerData) {
-          const coinItem = await this.processRealTimeCoinItem(tickerData);
-          if (coinItem) {
-            coinList.push(coinItem);
-          }
-        } else {
-          logDebug(`No ticker data available for ${symbol}`);
-        }
-      } catch (error) {
-        logError(`Error processing ${symbol}:`, error as Error);
-      }
-    }
 
-    // Sort by volume (USD value) - highest first (same as existing logic)
-    coinList.sort((a, b) => {
-      const aVolumeUSD = a.volume * a.price;
-      const bVolumeUSD = b.volume * b.price;
-      return bVolumeUSD - aVolumeUSD;
-    });
-
-    logInfo(`✅ Successfully generated analysis for ${coinList.length}/${symbols.length} symbols`);
-    return coinList;
-  }
-
-  // Process individual coin item using real-time WebSocket data (optimized for real-time)
-  private async processRealTimeCoinItem(ticker: BinanceTicker): Promise<CoinListItem | null> {
-    try {
-      const symbol = ticker.symbol;
-
-      // Generate REAL confidence signals using WebSocket cached data (no REST API calls)
-      const confidence = await this.generateRealTimeConfidenceSignals(symbol);
-
-      const coinItem: CoinListItem = {
-        symbol,
-        name: this.getCoinNameFromSymbol(symbol),
-        price: parseFloat(ticker.price),
-        priceChange24h: parseFloat(ticker.priceChangePercent),
-        volume: parseFloat(ticker.volume),
-        marketCap: undefined,
-        confidence,
-        lastUpdated: Date.now()
-      };
-
-      return coinItem;
-    } catch (error) {
-      logError(`Error processing real-time coin item ${ticker.symbol}`, error as Error);
-
-      // Return coin with default confidence if error occurs
-      const coinItem: CoinListItem = {
-        symbol: ticker.symbol,
-        name: this.getCoinNameFromSymbol(ticker.symbol),
-        price: parseFloat(ticker.price),
-        priceChange24h: parseFloat(ticker.priceChangePercent),
-        volume: parseFloat(ticker.volume),
-        marketCap: undefined,
-        confidence: {
-          '5m': { action: 'HOLD' as const, confidence: 50, strength: 25, color: 'yellow' as const },
-          '15m': { action: 'HOLD' as const, confidence: 50, strength: 25, color: 'yellow' as const },
-          '1h': { action: 'HOLD' as const, confidence: 50, strength: 25, color: 'yellow' as const },
-          '4h': { action: 'HOLD' as const, confidence: 50, strength: 25, color: 'yellow' as const },
-          '1d': { action: 'HOLD' as const, confidence: 50, strength: 25, color: 'yellow' as const }
-        },
-        lastUpdated: Date.now()
-      };
-
-      return coinItem;
-    }
-  }
-
-  // Get coin name from symbol using a mapping of common cryptocurrencies
-  private getCoinNameFromSymbol(symbol: string): string {
-    const baseAsset = symbol.replace('USDT', '').replace('BTC', '').replace('ETH', '');
-
-    const coinNames: { [key: string]: string } = {
-      'BTC': 'Bitcoin',
-      'ETH': 'Ethereum',
-      'BNB': 'BNB',
-      'XRP': 'XRP',
-      'ADA': 'Cardano',
-      'DOGE': 'Dogecoin',
-      'SOL': 'Solana',
-      'TRX': 'TRON',
-      'DOT': 'Polkadot',
-      'MATIC': 'Polygon',
-      'LTC': 'Litecoin',
-      'SHIB': 'Shiba Inu',
-      'AVAX': 'Avalanche',
-      'UNI': 'Uniswap',
-      'LINK': 'Chainlink',
-      'ATOM': 'Cosmos',
-      'XLM': 'Stellar',
-      'VET': 'VeChain',
-      'FIL': 'Filecoin',
-      'ICP': 'Internet Computer',
-      'NEAR': 'NEAR Protocol',
-      'ALGO': 'Algorand',
-      'MANA': 'Decentraland',
-      'SAND': 'The Sandbox',
-      'CRO': 'Cronos',
-      'APE': 'ApeCoin',
-      'LDO': 'Lido DAO',
-      'OP': 'Optimism',
-      'ARB': 'Arbitrum',
-      'TON': 'Toncoin',
-      'FET': 'Fetch.ai',
-      'ENS': 'Ethereum Name Service'
-    };
-
-    return coinNames[baseAsset] || baseAsset;
-  }
 
 
 
@@ -489,61 +263,88 @@ export class CoinListService {
     }
   }
 
-  // Start real-time updates using WebSocket data only
+  // Start real-time updates using combined WebSocket streams for tracked coins only
   private startRealTimeUpdates() {
-    logInfo('Starting WebSocket-only real-time updates for coin list');
+    logInfo('Starting combined WebSocket streams for tracked coins only (no all-tickers stream)');
 
-    // Subscribe to all tickers WebSocket stream
-    this.binanceService.subscribeToAllTickers((tickers) => {
-      // Process real-time ticker updates
-      this.processRealTimeTickerUpdates(tickers);
-    });
+    // Subscribe to individual coin price updates from combined streams
+    // This will be populated when coins are added to the current coin list
+    this.setupCoinSpecificSubscriptions();
 
-    // Start periodic confidence updates every 15 seconds
+    // Start periodic confidence updates every 30 seconds
     this.realTimeUpdateInterval = setInterval(async () => {
       if (!this.isProcessingRealTimeData && this.currentCoinList.length > 0) {
         await this.updateRealTimeConfidenceSignals();
       }
     }, this.REAL_TIME_UPDATE_INTERVAL);
 
-    logInfo('Started WebSocket-only real-time updates (15-second confidence updates, instant price updates)');
+    logInfo('Started combined WebSocket streams (30-second confidence updates, 30-second throttled price broadcasts for tracked coins only)');
   }
 
-  // Process real-time ticker updates from WebSocket
-  private processRealTimeTickerUpdates(tickers: BinanceTicker[]) {
+  // Setup individual coin subscriptions using combined streams (replaces all-tickers approach)
+  private setupCoinSpecificSubscriptions() {
+    logInfo('Setting up individual coin subscriptions using combined streams');
+    // Individual subscriptions will be set up when coins are added to currentCoinList
+    // This eliminates the need for processing all tickers
+  }
+
+  // Setup individual price subscriptions for specific coins (replaces all-tickers subscription)
+  private setupIndividualCoinSubscriptions(symbols: string[]) {
+    logInfo(`Setting up individual price subscriptions for ${symbols.length} coins using combined streams`);
+
+    symbols.forEach(symbol => {
+      // Subscribe to individual price updates for this symbol
+      this.binanceService.subscribeToPrice(symbol, (tickerData) => {
+        // Process the price update for this specific coin
+        this.processCoinPriceUpdate(symbol, tickerData);
+      });
+    });
+
+    logInfo(`✅ Successfully set up individual subscriptions for ${symbols.length} coins`);
+  }
+
+  // Process individual coin price update from combined stream with 30-second throttling
+  private processCoinPriceUpdate(symbol: string, tickerData: BinanceTicker) {
     try {
       this.performanceStats.wsUpdates++;
 
-      // Update current coin list with new price data
-      this.currentCoinList.forEach(coin => {
-        const ticker = tickers.find(t => t.symbol === coin.symbol);
-        if (ticker) {
-          const oldPrice = coin.price;
-          coin.price = parseFloat(ticker.price);
-          coin.priceChange24h = parseFloat(ticker.priceChangePercent);
-          coin.volume = parseFloat(ticker.volume);
-          coin.lastUpdated = Date.now();
+      // Find and update the specific coin in current coin list
+      const coinIndex = this.currentCoinList.findIndex(coin => coin.symbol === symbol);
+      if (coinIndex !== -1) {
+        const coin = this.currentCoinList[coinIndex];
 
-          // Broadcast individual price update if real-time service is available
-          if (this.realTimeService && oldPrice !== coin.price) {
-            this.realTimeService.broadcastCoinPriceUpdate(
-              coin.symbol,
-              coin.price,
-              coin.priceChange24h,
-              coin.volume
-            );
-          }
+        // Always update internal data (keep cache fresh)
+        coin.price = parseFloat(tickerData.price);
+        coin.priceChange24h = parseFloat(tickerData.priceChangePercent);
+        coin.volume = parseFloat(tickerData.volume);
+        coin.lastUpdated = Date.now();
+
+        // Throttle broadcasts to every 30 seconds
+        const now = Date.now();
+        const shouldBroadcast = (now - this.lastPriceBroadcastTime) >= this.PRICE_BROADCAST_THROTTLE;
+
+        if (this.realTimeService && shouldBroadcast) {
+          // Broadcast individual price update
+          this.realTimeService.broadcastCoinPriceUpdate(
+            coin.symbol,
+            coin.price,
+            coin.priceChange24h,
+            coin.volume
+          );
+
+          // Broadcast full coin list update
+          this.realTimeService.broadcastCoinListUpdate(this.currentCoinList);
+
+          // Update last broadcast time
+          this.lastPriceBroadcastTime = now;
+
+          logDebug(`Broadcasted price updates (30s throttle) - ${symbol}: $${coin.price.toFixed(6)} (${coin.priceChange24h.toFixed(2)}%)`);
+        } else {
+          logDebug(`Updated price (no broadcast - throttled) for ${symbol}: $${coin.price.toFixed(6)} (${coin.priceChange24h.toFixed(2)}%)`);
         }
-      });
-
-      // Broadcast full coin list update
-      if (this.realTimeService && this.currentCoinList.length > 0) {
-        this.realTimeService.broadcastCoinListUpdate(this.currentCoinList);
       }
-
-      logDebug(`Processed ${tickers.length} real-time ticker updates`);
     } catch (error) {
-      logError('Error processing real-time ticker updates', error as Error);
+      logError(`Error processing price update for ${symbol}`, error as Error);
     }
   }
 

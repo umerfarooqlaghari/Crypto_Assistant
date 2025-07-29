@@ -279,8 +279,7 @@ export class BinanceService {
     // Notify individual symbol subscribers
     this.notifySubscribers(ticker.s, tickerData);
 
-    // Notify all-tickers subscribers
-    this.notifyAllTickersSubscribers();
+    // No longer notify all-tickers subscribers - using individual subscriptions only
   }
 
   // Handle combined kline stream messages
@@ -992,8 +991,7 @@ export class BinanceService {
           // Notify individual symbol subscribers
           this.notifySubscribers(ticker.s, tickerData);
 
-          // Notify all-tickers subscribers (for compatibility)
-          this.notifyAllTickersSubscribers();
+          // No longer notify all-tickers subscribers - using individual subscriptions only
         }
       } catch (error) {
         logError(`Error parsing ticker WebSocket message for ${symbol}`, error as Error);
@@ -1090,12 +1088,12 @@ export class BinanceService {
     this.wsConnections.set(connectionKey, ws);
   }
 
-  // Subscribe to price updates for a specific symbol
+  // Subscribe to price updates for a specific symbol (uses combined streams)
   subscribeToPrice(symbol: string, callback: (data: BinanceTicker) => void) {
     if (!this.subscribers.has(symbol)) {
       this.subscribers.set(symbol, new Set());
-      // Create WebSocket connection for this symbol if it doesn't exist
-      this.subscribeToIndividualTicker(symbol);
+      // Add symbol to tracked symbols for combined streams (no individual connections)
+      this.addTrackedSymbols([symbol]);
     }
     this.subscribers.get(symbol)!.add(callback);
 
@@ -1104,9 +1102,8 @@ export class BinanceService {
     if (cached) {
       callback(cached);
     } else {
-      // No REST API fallback - WebSocket will provide data when available
-      // The all-market tickers stream should have data for all USDT pairs
-      logDebug(`No cached data for ${symbol} yet - WebSocket will provide data when available`);
+      // No REST API fallback - combined WebSocket streams will provide data when available
+      logDebug(`No cached data for ${symbol} yet - combined WebSocket streams will provide data when available`);
     }
   }
 
