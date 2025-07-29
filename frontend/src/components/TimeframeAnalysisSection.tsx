@@ -157,11 +157,9 @@ export default function TimeframeAnalysisSection({
                 return (
                   <div key={key} className="flex justify-between items-center py-2">
                     <div className="flex-1">
-                      <div className="text-sm text-gray-400">Indicator</div>
                       <div className="font-medium">{displayName}</div>
                     </div>
                     <div className="flex-1 text-right">
-                      <div className="text-sm text-gray-400">Signal</div>
                       <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${getSignalBadgeColor(signal)}`}>
                         {signal}
                       </span>
