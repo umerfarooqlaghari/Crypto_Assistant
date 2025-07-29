@@ -256,8 +256,8 @@ export default function TechnicalIndicators({ indicators, currentPrice, compact 
         </div>
       )}
 
-      <div className="space-y-4">
-        {/* Render indicators in fixed order (same as compact section) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Render indicators in 2x2 grid layout */}
         {indicatorData.map((indicator) => (
           <div key={indicator.type} className="p-4 bg-gradient-to-r from-gray-700/20 to-gray-600/10 rounded-lg border border-gray-600/30">
             <div className="flex items-center justify-between mb-2">

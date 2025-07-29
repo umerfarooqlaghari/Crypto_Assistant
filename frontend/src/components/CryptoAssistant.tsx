@@ -243,11 +243,11 @@ export default function CryptoAssistant({ initialSymbol = 'BTCUSDT' }: CryptoAss
         </div>
       </div>
 
-      {/* Compact Above-the-Fold Layout */}
+      {/* Reorganized Above-the-Fold Layout */}
       {(realTimeData || signalData) && signalData && signalData.signal && signalData.technicalIndicators && (
         <div className="space-y-4 mb-6">
-          {/* Top Row: Coin Details + Trading Signal */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Top Row: Coin Details + Confidence & Signal Strength + Pattern Analysis */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* Coin Details */}
             <div className="bg-gradient-to-br from-gray-800/90 to-black/90 backdrop-blur-md rounded-xl p-4 border border-gray-600/30 shadow-xl">
               <div className="flex items-center justify-between">
@@ -276,7 +276,7 @@ export default function CryptoAssistant({ initialSymbol = 'BTCUSDT' }: CryptoAss
               </div>
             </div>
 
-            {/* Trading Signal Summary */}
+            {/* Confidence & Signal Strength with Buy/Sell/Hold */}
             <div className={`bg-gradient-to-br backdrop-blur-md rounded-xl p-4 border shadow-xl ${
               signalData.signal.action === 'BUY' ? 'from-green-900/30 to-green-800/20 border-green-500/40' :
               signalData.signal.action === 'SELL' ? 'from-red-900/30 to-red-800/20 border-red-500/40' :
@@ -337,59 +337,8 @@ export default function CryptoAssistant({ initialSymbol = 'BTCUSDT' }: CryptoAss
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Second Row: Technical Indicators + Pattern Analysis */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Compact Technical Indicators */}
-            <div className="bg-gradient-to-br from-gray-800/90 to-black/90 backdrop-blur-md rounded-xl p-4 border border-gray-600/30 shadow-xl">
-              <h3 className="text-lg font-semibold text-gray-100 mb-3 flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-gray-400" />
-                Technical Indicators
-              </h3>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">RSI:</span>
-                  <span className={`font-semibold ${
-                    signalData.technicalIndicators.rsi > 70 ? 'text-red-400' :
-                    signalData.technicalIndicators.rsi < 30 ? 'text-green-400' : 'text-yellow-400'
-                  }`}>
-                    {signalData.technicalIndicators.rsi > 70 ? 'Bearish' :
-                     signalData.technicalIndicators.rsi < 30 ? 'Bullish' : 'Neutral'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">MACD:</span>
-                  <span className={`font-semibold ${
-                    signalData.technicalIndicators.macd?.MACD > signalData.technicalIndicators.macd?.signal ? 'text-green-400' : 'text-red-400'
-                  }`}>
-                    {signalData.technicalIndicators.macd?.MACD > signalData.technicalIndicators.macd?.signal ? 'Bullish' : 'Bearish'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-400">EMA Cross:</span>
-                  <span className={`font-semibold ${
-                    signalData.technicalIndicators.ema20 > signalData.technicalIndicators.ema50 ? 'text-green-400' : 'text-red-400'
-                  }`}>
-                    {signalData.technicalIndicators.ema20 > signalData.technicalIndicators.ema50 ? 'Bullish' : 'Bearish'}
-                  </span>
-                </div>
-
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Bollinger:</span>
-                  <span className={`font-semibold ${
-                    (realTimeData?.price || signalData?.currentPrice || 0) > signalData.technicalIndicators.bollingerBands?.upper ? 'text-red-400' :
-                    (realTimeData?.price || signalData?.currentPrice || 0) < signalData.technicalIndicators.bollingerBands?.lower ? 'text-green-400' : 'text-yellow-400'
-                  }`}>
-                    {(realTimeData?.price || signalData?.currentPrice || 0) > signalData.technicalIndicators.bollingerBands?.upper ? 'Bearish' :
-                     (realTimeData?.price || signalData?.currentPrice || 0) < signalData.technicalIndicators.bollingerBands?.lower ? 'Bullish' : 'Neutral'}
-                  </span>
-                </div>
-
-              </div>
-            </div>
-
-            {/* Compact Pattern Analysis */}
+            {/* Pattern Analysis */}
             <div className="bg-gradient-to-br from-gray-800/90 to-black/90 backdrop-blur-md rounded-xl p-4 border border-gray-600/30 shadow-xl">
               <h3 className="text-lg font-semibold text-gray-100 mb-3 flex items-center gap-2">
                 <div className="w-4 h-4 text-gray-400">👁</div>
@@ -443,7 +392,36 @@ export default function CryptoAssistant({ initialSymbol = 'BTCUSDT' }: CryptoAss
             </div>
           </div>
 
-          {/* Third Row: Entry Points & Take Profits (Only for BUY/HOLD signals) */}
+
+        </div>
+      )}
+
+      {/* Detailed Sections (Below the fold - user can scroll to see these) */}
+      {signalData && signalData.signal && signalData.technicalIndicators && (
+        <div className="space-y-6 mb-6">
+          {/* Bottom Row: Detailed Technical Indicators + Pattern Analysis */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Detailed Technical Indicators */}
+            <div className="bg-gradient-to-br from-gray-800/90 to-black/90 backdrop-blur-md rounded-xl p-6 border border-gray-600/30 shadow-xl">
+              <h3 className="text-xl font-semibold text-gray-100 mb-4 flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-gray-400" />
+                Detailed Technical Analysis
+              </h3>
+              <TechnicalIndicators
+                indicators={signalData.technicalIndicators}
+                currentPrice={realTimeData?.price || signalData?.currentPrice || 0}
+                compact={true}
+              />
+            </div>
+
+            {/* Chart Pattern + Candlestick Pattern Analysis */}
+            <PatternAnalysis
+              chartPatterns={signalData.chartPatterns}
+              candlestickPatterns={signalData.candlestickPatterns}
+            />
+          </div>
+
+          {/* Trading Levels (Only for BUY/HOLD signals) */}
           {signalData.signal.action !== 'SELL' && (
             <div className="bg-gradient-to-br from-gray-800/90 to-black/90 backdrop-blur-md rounded-xl p-4 border border-gray-600/30 shadow-xl">
               <h3 className="text-lg font-semibold text-gray-100 mb-3 flex items-center gap-2">
@@ -505,33 +483,9 @@ export default function CryptoAssistant({ initialSymbol = 'BTCUSDT' }: CryptoAss
               </div>
             </div>
           )}
-        </div>
-      )}
 
-      {/* Detailed Sections (Below the fold - user can scroll to see these) */}
-      {signalData && signalData.signal && signalData.technicalIndicators && (
-        <div className="space-y-6 mb-6">
-          {/* Detailed Technical Indicators */}
-          <div className="bg-gradient-to-br from-gray-800/90 to-black/90 backdrop-blur-md rounded-xl p-6 border border-gray-600/30 shadow-xl">
-            <h3 className="text-xl font-semibold text-gray-100 mb-4 flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-gray-400" />
-              Detailed Technical Analysis
-            </h3>
-            <TechnicalIndicators
-              indicators={signalData.technicalIndicators}
-              currentPrice={realTimeData?.price || signalData?.currentPrice || 0}
-              compact={true}
-            />
-          </div>
-
-          {/* Detailed Pattern Analysis */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <PatternAnalysis
-              chartPatterns={signalData.chartPatterns}
-              candlestickPatterns={signalData.candlestickPatterns}
-            />
-            <MarketOverview />
-          </div>
+          {/* Market Overview (moved below) */}
+          <MarketOverview />
 
           {/* Signal Reasoning */}
           <div className="bg-gradient-to-br from-gray-800/90 to-black/90 backdrop-blur-md rounded-xl p-6 border border-gray-600/30 shadow-xl">

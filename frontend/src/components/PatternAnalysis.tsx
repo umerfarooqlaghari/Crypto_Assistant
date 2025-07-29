@@ -46,22 +46,22 @@ export default function PatternAnalysis({ chartPatterns, candlestickPatterns }: 
   };
 
   const PatternCard = ({ pattern, type }: { pattern: Pattern; type: string }) => (
-    <div className={`p-4 rounded-lg border ${getPatternBgColor(pattern.type)}`}>
+    <div className={`p-3 rounded-lg border ${getPatternBgColor(pattern.type)}`}>
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <div className={getPatternColor(pattern.type)}>
             {getPatternIcon(pattern.type)}
           </div>
-          <span className="font-medium text-gray-100">{pattern.name}</span>
+          <span className="font-medium text-gray-100 text-sm">{pattern.name}</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className={`text-sm font-semibold ${getConfidenceColor(pattern.confidence)}`}>
+          <span className={`text-xs font-semibold ${getConfidenceColor(pattern.confidence)}`}>
             {pattern.confidence}%
           </span>
-          <div className="w-12 h-2 bg-gray-700 rounded-full overflow-hidden">
-            <div 
+          <div className="w-10 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+            <div
               className={`h-full transition-all duration-500 ${
-                pattern.confidence >= 80 ? 'bg-green-500' : 
+                pattern.confidence >= 80 ? 'bg-green-500' :
                 pattern.confidence >= 60 ? 'bg-yellow-500' : 'bg-red-500'
               }`}
               style={{ width: `${pattern.confidence}%` }}
@@ -69,9 +69,9 @@ export default function PatternAnalysis({ chartPatterns, candlestickPatterns }: 
           </div>
         </div>
       </div>
-      <p className="text-sm text-gray-300">{pattern.description}</p>
+      <p className="text-xs text-gray-300 line-clamp-2">{pattern.description}</p>
       <div className="mt-2 flex items-center gap-2">
-        <span className={`text-xs px-2 py-1 rounded-full ${getPatternBgColor(pattern.type)} ${getPatternColor(pattern.type)}`}>
+        <span className={`text-xs px-2 py-0.5 rounded-full ${getPatternBgColor(pattern.type)} ${getPatternColor(pattern.type)}`}>
           {pattern.type}
         </span>
         <span className="text-xs text-gray-400">{type}</span>
@@ -80,13 +80,14 @@ export default function PatternAnalysis({ chartPatterns, candlestickPatterns }: 
   );
 
   return (
-    <div className="bg-gradient-to-br from-gray-800/90 to-black/90 backdrop-blur-md rounded-xl p-6 border border-gray-600/30 shadow-xl">
-      <div className="flex items-center gap-2 mb-6">
+    <div className="bg-gradient-to-br from-gray-800/90 to-black/90 backdrop-blur-md rounded-xl p-6 border border-gray-600/30 shadow-xl h-fit">
+      <div className="flex items-center gap-2 mb-4">
         <Eye className="w-5 h-5 text-gray-400" />
         <h3 className="text-xl font-semibold text-gray-100">Pattern Analysis</h3>
       </div>
 
-      <div className="space-y-6">
+      {/* Scrollable content with max height */}
+      <div className="max-h-96 overflow-y-auto space-y-4 pr-2">
         {/* Chart Patterns */}
         <div>
           <h4 className="text-lg font-medium text-gray-100 mb-3 flex items-center gap-2">
@@ -94,14 +95,19 @@ export default function PatternAnalysis({ chartPatterns, candlestickPatterns }: 
             Chart Patterns
           </h4>
           {chartPatterns.length > 0 ? (
-            <div className="space-y-3">
-              {chartPatterns.map((pattern, index) => (
+            <div className="space-y-2">
+              {chartPatterns.slice(0, 3).map((pattern, index) => (
                 <PatternCard key={index} pattern={pattern} type="Chart Pattern" />
               ))}
+              {chartPatterns.length > 3 && (
+                <div className="text-center p-2 bg-gray-700/20 rounded-lg">
+                  <p className="text-gray-400 text-sm">+{chartPatterns.length - 3} more patterns</p>
+                </div>
+              )}
             </div>
           ) : (
-            <div className="p-4 bg-gradient-to-r from-gray-700/20 to-gray-600/10 rounded-lg border border-gray-600/30 text-center">
-              <p className="text-gray-400">No chart patterns detected</p>
+            <div className="p-3 bg-gradient-to-r from-gray-700/20 to-gray-600/10 rounded-lg border border-gray-600/30 text-center">
+              <p className="text-gray-400 text-sm">No chart patterns detected</p>
             </div>
           )}
         </div>
@@ -113,14 +119,19 @@ export default function PatternAnalysis({ chartPatterns, candlestickPatterns }: 
             Candlestick Patterns
           </h4>
           {candlestickPatterns.length > 0 ? (
-            <div className="space-y-3">
-              {candlestickPatterns.map((pattern, index) => (
+            <div className="space-y-2">
+              {candlestickPatterns.slice(0, 3).map((pattern, index) => (
                 <PatternCard key={index} pattern={pattern} type="Candlestick Pattern" />
               ))}
+              {candlestickPatterns.length > 3 && (
+                <div className="text-center p-2 bg-gray-700/20 rounded-lg">
+                  <p className="text-gray-400 text-sm">+{candlestickPatterns.length - 3} more patterns</p>
+                </div>
+              )}
             </div>
           ) : (
-            <div className="p-4 bg-gradient-to-r from-gray-700/20 to-gray-600/10 rounded-lg border border-gray-600/30 text-center">
-              <p className="text-gray-400">No candlestick patterns detected</p>
+            <div className="p-3 bg-gradient-to-r from-gray-700/20 to-gray-600/10 rounded-lg border border-gray-600/30 text-center">
+              <p className="text-gray-400 text-sm">No candlestick patterns detected</p>
             </div>
           )}
         </div>
