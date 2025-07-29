@@ -250,21 +250,19 @@ export default function CryptoAssistant({ initialSymbol = 'BTCUSDT' }: CryptoAss
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* Coin Details */}
             <div className="bg-gradient-to-br from-gray-800/90 to-black/90 backdrop-blur-md rounded-xl p-4 border border-gray-600/30 shadow-xl">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold text-gray-100 mb-1">{selectedSymbol}</h2>
-                  <div className="flex items-center gap-3">
-                    <span className="text-2xl font-bold text-gray-100">
-                      {formatPrice(realTimeData?.price || signalData?.currentPrice || 0)}
-                    </span>
-                    <span className={`text-lg font-medium ${
-                      (realTimeData?.priceChange24h || parseFloat(signalData?.marketData?.priceChange24h || '0')) >= 0 ? 'text-green-400' : 'text-red-400'
-                    }`}>
-                      {formatPercentage(realTimeData?.priceChange24h || parseFloat(signalData?.marketData?.priceChange24h || '0'))}
-                    </span>
-                  </div>
+              <div className="text-center">
+                <h2 className="text-xl font-semibold text-gray-100 mb-3">{selectedSymbol}</h2>
+                <div className="flex items-center justify-center gap-3 mb-3">
+                  <span className="text-2xl font-bold text-gray-100">
+                    {formatPrice(realTimeData?.price || signalData?.currentPrice || 0)}
+                  </span>
+                  <span className={`text-lg font-medium ${
+                    (realTimeData?.priceChange24h || parseFloat(signalData?.marketData?.priceChange24h || '0')) >= 0 ? 'text-green-400' : 'text-red-400'
+                  }`}>
+                    {formatPercentage(realTimeData?.priceChange24h || parseFloat(signalData?.marketData?.priceChange24h || '0'))}
+                  </span>
                 </div>
-                <div className="text-right">
+                <div>
                   <div className="text-sm text-gray-400 mb-1">24h Volume</div>
                   <div className="text-lg font-semibold text-gray-100">
                     {new Intl.NumberFormat('en-US', {
@@ -340,27 +338,23 @@ export default function CryptoAssistant({ initialSymbol = 'BTCUSDT' }: CryptoAss
 
             {/* Pattern Analysis */}
             <div className="bg-gradient-to-br from-gray-800/90 to-black/90 backdrop-blur-md rounded-xl p-4 border border-gray-600/30 shadow-xl">
-              <h3 className="text-lg font-semibold text-gray-100 mb-3 flex items-center gap-2">
-                <div className="w-4 h-4 text-gray-400">👁</div>
-                Pattern Analysis
-              </h3>
-              <div className="space-y-2">
+              <div className="text-center space-y-3">
                 {/* Pattern Summary */}
-                <div className="grid grid-cols-3 gap-2 text-center text-sm mb-3">
+                <div className="grid grid-cols-3 gap-2 text-center text-sm">
                   <div>
-                    <div className="text-green-400 font-semibold">
+                    <div className="text-green-400 font-semibold text-lg">
                       {[...(signalData.chartPatterns || []), ...(signalData.candlestickPatterns || [])].filter(p => p.type === 'BULLISH').length}
                     </div>
                     <div className="text-xs text-gray-400">Bullish</div>
                   </div>
                   <div>
-                    <div className="text-red-400 font-semibold">
+                    <div className="text-red-400 font-semibold text-lg">
                       {[...(signalData.chartPatterns || []), ...(signalData.candlestickPatterns || [])].filter(p => p.type === 'BEARISH').length}
                     </div>
                     <div className="text-xs text-gray-400">Bearish</div>
                   </div>
                   <div>
-                    <div className="text-yellow-400 font-semibold">
+                    <div className="text-yellow-400 font-semibold text-lg">
                       {[...(signalData.chartPatterns || []), ...(signalData.candlestickPatterns || [])].filter(p => p.type === 'NEUTRAL').length}
                     </div>
                     <div className="text-xs text-gray-400">Neutral</div>
@@ -368,15 +362,15 @@ export default function CryptoAssistant({ initialSymbol = 'BTCUSDT' }: CryptoAss
                 </div>
 
                 {/* Top Patterns */}
-                <div className="space-y-1">
+                <div className="space-y-2">
                   {[...(signalData.chartPatterns || []), ...(signalData.candlestickPatterns || [])]
                     .sort((a, b) => b.confidence - a.confidence)
                     .slice(0, 3)
                     .map((pattern, index) => (
-                      <div key={index} className="flex justify-between items-center text-sm">
-                        <span className="text-gray-300 truncate">{pattern.name}</span>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-xs px-1 py-0.5 rounded ${
+                      <div key={index} className="text-center">
+                        <div className="text-sm text-gray-300 mb-1">{pattern.name}</div>
+                        <div className="flex items-center justify-center gap-2">
+                          <span className={`text-xs px-2 py-1 rounded ${
                             pattern.type === 'BULLISH' ? 'bg-green-900/30 text-green-400' :
                             pattern.type === 'BEARISH' ? 'bg-red-900/30 text-red-400' :
                             'bg-yellow-900/30 text-yellow-400'

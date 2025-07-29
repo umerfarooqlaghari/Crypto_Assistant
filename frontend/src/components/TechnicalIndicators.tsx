@@ -260,13 +260,14 @@ export default function TechnicalIndicators({ indicators, currentPrice, compact 
         {/* Render indicators in 2x2 grid layout */}
         {indicatorData.map((indicator) => (
           <div key={indicator.type} className="p-4 bg-gradient-to-r from-gray-700/20 to-gray-600/10 rounded-lg border border-gray-600/30">
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-gray-300">{indicator.name}</span>
+                <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                <span className="text-lg font-bold text-gray-100">{indicator.name}</span>
               </div>
-              <span className={`text-sm font-semibold ${
-                indicator.status === 'BULLISH' ? 'text-green-400' :
-                indicator.status === 'BEARISH' ? 'text-red-400' : 'text-yellow-400'
+              <span className={`text-sm font-bold px-2 py-1 rounded-full ${
+                indicator.status === 'BULLISH' ? 'text-green-400 bg-green-900/20' :
+                indicator.status === 'BEARISH' ? 'text-red-400 bg-red-900/20' : 'text-yellow-400 bg-yellow-900/20'
               }`}>
                 {indicator.status}
               </span>
