@@ -439,6 +439,9 @@ export default function CoinList() {
             Crypto Assistant - Coin List
           </h1>
           <div className="flex items-center gap-4">
+            {/* Notification System - Moved to left side */}
+            <NotificationSystem />
+
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
@@ -447,8 +450,6 @@ export default function CoinList() {
                     {isConnected ? 'WebSocket Connected' : 'Disconnected'}
                   </span>
                 </div>
-
-
               </div>
             </div>
 
@@ -467,9 +468,6 @@ export default function CoinList() {
               </span>
             </div>
 
-            {/* Notification System */}
-            <NotificationSystem />
-
             <button
               onClick={() => fetchCoinList(true)}
               disabled={refreshing}
@@ -483,7 +481,7 @@ export default function CoinList() {
 
         {/* Stats Summary */}
         {stats && (
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
             {timeframes.map(({ key, label }) => (
               <div key={key} className="bg-gray-800/50 rounded-lg p-4 border border-gray-600/30">
                 <div className="text-sm text-gray-400 mb-1">{label} Signals</div>

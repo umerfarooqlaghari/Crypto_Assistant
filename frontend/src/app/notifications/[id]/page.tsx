@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { ArrowLeft, AlertCircle } from 'lucide-react';
 import { getApiUrl } from '../../../utils/api';
 import TimeframeAnalysisSection from '../../../components/TimeframeAnalysisSection';
@@ -168,7 +169,99 @@ export default function NotificationDetailPage() {
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <h1 className="text-2xl font-bold">Technical Analysis Summary</h1>
+          <h1 className="text-2xl font-bold">Notification Details</h1>
+        </div>
+
+        {/* Notification Details Card */}
+        <div className="bg-gray-800 rounded-lg overflow-hidden mb-6">
+          {/* Top Section - Notification Message */}
+          <div className="bg-yellow-100 p-4 border-l-4 border-yellow-500">
+            <div className="flex items-start justify-between">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5" />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <h3 className="font-semibold text-gray-900">{notification.title}</h3>
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${
+                      notification.priority === 'HIGH' ? 'bg-red-100 text-red-800' :
+                      notification.priority === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-green-100 text-green-800'
+                    }`}>
+                      {notification.priority} Priority
+                    </span>
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${
+                      notification.signal === 'BUY' ? 'bg-green-100 text-green-800' :
+                      notification.signal === 'SELL' ? 'bg-red-100 text-red-800' :
+                      'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {notification.signal}
+                    </span>
+                  </div>
+                  <p className="text-gray-700 text-sm">
+                    {notification.message.split(notification.symbol).map((part, index, array) => (
+                      <span key={index}>
+                        {part}
+                        {index < array.length - 1 && (
+                          <Link
+                            href={`/?symbol=${notification.symbol}`}
+                            className="text-blue-600 hover:text-blue-800 underline font-semibold"
+                          >
+                            {notification.symbol}
+                          </Link>
+                        )}
+                      </span>
+                    ))}
+                  </p>
+                  <div className="flex items-center gap-4 mt-2 text-xs text-gray-600">
+                    <span>📅 {new Date(notification.createdAt).toLocaleDateString()}, {new Date(notification.createdAt).toLocaleTimeString()}</span>
+                    <span>⏱️ Timeframe: {notification.timeframe === 'multi' ? notification.triggeredTimeframes?.join(', ') || 'Multiple' : notification.timeframe || '5m'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom Section - Signal Details */}
+          <div className="bg-gray-900 p-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Signal Strength */}
+              <div>
+                <h4 className="text-sm font-medium text-gray-400 mb-2">Signal Strength</h4>
+                <div className="text-2xl font-bold text-blue-400 mb-2">{(notification.strength || 49).toFixed(1)}%</div>
+                <div className="w-full bg-gray-700 rounded-full h-2">
+                  <div
+                    className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${Math.min(notification.strength || 49, 100)}%` }}
+                  ></div>
+                </div>
+              </div>
+
+              {/* Confidence Level */}
+              <div>
+                <h4 className="text-sm font-medium text-gray-400 mb-2">Confidence Level</h4>
+                <div className="text-2xl font-bold text-green-400 mb-2">{(notification.confidence || 98).toFixed(1)}%</div>
+                <div className="w-full bg-gray-700 rounded-full h-2">
+                  <div
+                    className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${Math.min(notification.confidence || 98, 100)}%` }}
+                  ></div>
+                </div>
+              </div>
+
+              {/* Symbol */}
+              <div>
+                <h4 className="text-sm font-medium text-gray-400 mb-2">Symbol</h4>
+                <div className="text-2xl font-bold text-white mb-2">{notification.symbol}</div>
+                <div className="text-xs text-gray-500 mb-3">Timeframe: {notification.timeframe === 'multi' ? 'Multi' : notification.timeframe || '5m'}</div>
+                <Link
+                  href={`/?symbol=${notification.symbol}`}
+                  className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
+                >
+                  📊 Go to coin analysis
+                </Link>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Main Content - Render timeframes */}

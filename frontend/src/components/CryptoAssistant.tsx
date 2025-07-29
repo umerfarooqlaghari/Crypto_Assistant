@@ -250,7 +250,7 @@ export default function CryptoAssistant({ initialSymbol = 'BTCUSDT' }: CryptoAss
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* Coin Details */}
             <div className="bg-gradient-to-br from-gray-800/90 to-black/90 backdrop-blur-md rounded-xl p-4 border border-gray-600/30 shadow-xl">
-              <div className="text-center">
+              <div className="flex flex-col items-center justify-center h-full text-center">
                 <h2 className="text-xl font-semibold text-gray-100 mb-3">{selectedSymbol}</h2>
                 <div className="flex items-center justify-center gap-3 mb-3">
                   <span className="text-2xl font-bold text-gray-100">
@@ -338,7 +338,7 @@ export default function CryptoAssistant({ initialSymbol = 'BTCUSDT' }: CryptoAss
 
             {/* Pattern Analysis */}
             <div className="bg-gradient-to-br from-gray-800/90 to-black/90 backdrop-blur-md rounded-xl p-4 border border-gray-600/30 shadow-xl">
-              <div className="text-center space-y-3">
+              <div className="flex flex-col items-center justify-center h-full text-center space-y-3">
                 {/* Pattern Summary */}
                 <div className="grid grid-cols-3 gap-2 text-center text-sm">
                   <div>
@@ -478,22 +478,25 @@ export default function CryptoAssistant({ initialSymbol = 'BTCUSDT' }: CryptoAss
             </div>
           )}
 
-          {/* Market Overview (moved below) */}
-          <MarketOverview />
+          {/* Market Overview and Signal Reasoning Side by Side */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Market Overview */}
+            <MarketOverview />
 
-          {/* Signal Reasoning */}
-          <div className="bg-gradient-to-br from-gray-800/90 to-black/90 backdrop-blur-md rounded-xl p-6 border border-gray-600/30 shadow-xl">
-            <h3 className="text-xl font-semibold text-gray-100 mb-4 flex items-center gap-2">
-              <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-              Signal Reasoning
-            </h3>
-            <div className="space-y-2">
-              {signalData.signal.reasoning?.map((reason, index) => (
-                <div key={index} className="flex items-start gap-2 text-gray-300">
-                  <div className="w-1.5 h-1.5 bg-gray-400 rounded-full mt-2 flex-shrink-0"></div>
-                  <span>{reason}</span>
-                </div>
-              ))}
+            {/* Signal Reasoning */}
+            <div className="bg-gradient-to-br from-gray-800/90 to-black/90 backdrop-blur-md rounded-xl p-6 border border-gray-600/30 shadow-xl">
+              <h3 className="text-xl font-semibold text-gray-100 mb-4 flex items-center gap-2">
+                <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                Signal Reasoning
+              </h3>
+              <div className="space-y-2">
+                {signalData.signal.reasoning?.map((reason, index) => (
+                  <div key={index} className="flex items-start gap-2 text-gray-300">
+                    <div className="w-1.5 h-1.5 bg-gray-400 rounded-full mt-2 flex-shrink-0"></div>
+                    <span>{reason}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
