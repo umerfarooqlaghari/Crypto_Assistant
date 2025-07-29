@@ -5,7 +5,7 @@ export async function getSignals()
     const response = await axios.get('https://api.binance.com/api/v3/klines', {
         params: {
             symbol: 'BTCUSDT',
-            interval: '1m',
+            interval: '5m',
             limit: 5,
         }
     });

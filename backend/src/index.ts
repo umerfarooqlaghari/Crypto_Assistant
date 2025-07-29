@@ -21,12 +21,6 @@ import { getCoinListService } from './controllers/coinListController';
 const app = express();
 const server = createServer(app);
 
-// Initialize real-time data service with WebSocket support
-const realTimeService = new RealTimeDataService(server);
-
-// Connect coin list service to real-time service for broadcasting updates
-setRealTimeService(realTimeService);
-
 // Initialize shared services with WebSocket subscriptions FIRST
 async function initializeServices() {
   try {
@@ -34,22 +28,41 @@ async function initializeServices() {
     await serviceManager.initialize();
     console.log('✅ Shared services initialized successfully');
 
-    // Now initialize coin list service which will use the shared services
+    // Now initialize real-time data service with WebSocket support (after ServiceManager is ready)
+    const realTimeService = new RealTimeDataService(server);
+
+    // Connect coin list service to real-time service for broadcasting updates
+    setRealTimeService(realTimeService);
+
+    // Initialize coin list service which will use the shared services
     const coinListService = getCoinListService(); // eslint-disable-line @typescript-eslint/no-unused-vars
     console.log('🔄 Coin list service initialized - background updates started');
+
+    // Connect notification rule checker to socket.io for real-time notifications
+    notificationRuleChecker.setSocketIO(realTimeService.getSocketIO());
+
+    return realTimeService;
   } catch (error) {
     console.error('❌ Failed to initialize services:', error);
     process.exit(1);
   }
 }
 
-// Initialize services
-initializeServices();
+// Initialize services and start server
+let realTimeService: RealTimeDataService;
 
-// Connect notification rule checker to socket.io for real-time notifications
-notificationRuleChecker.setSocketIO(realTimeService.getSocketIO());
+initializeServices().then(async (service) => {
+  realTimeService = service!;
 
-// CORS configuration
+  // Start server after services are initialized
+  await startServerAfterInit();
+}).catch((error) => {
+  console.error('❌ Failed to initialize services:', error);
+  process.exit(1);
+});
+
+async function startServerAfterInit() {
+  // CORS configuration
 app.use(cors({
     origin: (origin, callback) => {
         // Allow requests with no origin (mobile apps, etc.)
@@ -140,33 +153,29 @@ const gracefulShutdown = async () => {
     process.exit(0);
 };
 
-process.on('SIGTERM', gracefulShutdown);
-process.on('SIGINT', gracefulShutdown);
+  process.on('SIGTERM', gracefulShutdown);
+  process.on('SIGINT', gracefulShutdown);
 
-// Start server with database initialization
-const startServer = async () => {
-    try {
-        // Initialize database connection
-        await prismaService.connect();
-        logger.info('📊 Database connected successfully');
+  // Start server with database initialization
+  try {
+      // Initialize database connection
+      await prismaService.connect();
+      logger.info('📊 Database connected successfully');
 
-        // Initialize default settings if needed
-        await DefaultSettingsService.initializeDefaultSettings();
-        logger.info('⚙️ Default settings initialized');
+      // Initialize default settings if needed
+      await DefaultSettingsService.initializeDefaultSettings();
+      logger.info('⚙️ Default settings initialized');
 
-        // Start the server
-        server.listen(config.port, () => {
-            logger.info(`🚀 Server started on port ${config.port} in ${config.nodeEnv} mode`);
-            logger.info(`📡 WebSocket server running for real-time data`);
-            logger.info(`🔧 Admin panel available at http://localhost:${config.port}/api/admin`);
-        });
-    } catch (error) {
-        logger.error('Failed to start server:', error);
-        process.exit(1);
-    }
-};
-
-// Start the server
-startServer();
+      // Start the server
+      server.listen(config.port, () => {
+          logger.info(`🚀 Server started on port ${config.port} in ${config.nodeEnv} mode`);
+          logger.info(`📡 WebSocket server running for real-time data`);
+          logger.info(`🔧 Admin panel available at http://localhost:${config.port}/api/admin`);
+      });
+  } catch (error) {
+      logger.error('Failed to start server:', error);
+      process.exit(1);
+  }
+}
 
 export default app;

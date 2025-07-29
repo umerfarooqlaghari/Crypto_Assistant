@@ -22,7 +22,6 @@ interface CoinListItem {
   volume: number;
   marketCap?: number;
   confidence: {
-    '1m': ConfidenceSignal;
     '5m': ConfidenceSignal;
     '15m': ConfidenceSignal;
     '1h': ConfidenceSignal;
@@ -72,7 +71,6 @@ export default function CoinList() {
 
 
   const timeframes = [
-    { key: '1m', label: '1m' },
     { key: '5m', label: '5m' },
     { key: '15m', label: '15m' },
     { key: '1h', label: '1h' },
@@ -306,7 +304,7 @@ export default function CoinList() {
 
   // Calculate smart score for sorting (combines confidence and strength across timeframes)
   const calculateSmartScore = (coin: CoinListItem, targetAction?: 'BUY' | 'SELL' | 'HOLD') => {
-    const timeframes = ['1m', '5m', '15m', '1h', '4h', '1d'] as const;
+    const timeframes = ['5m', '15m', '1h', '4h', '1d'] as const;
     let totalScore = 0;
     let matchingSignals = 0;
 
@@ -350,7 +348,7 @@ export default function CoinList() {
       if (filterSignal === 'ALL') return true;
 
       // Check if any timeframe has the target signal
-      const timeframes = ['1m', '5m', '15m', '1h', '4h', '1d'] as const;
+      const timeframes = ['5m', '15m', '1h', '4h', '1d'] as const;
       return timeframes.some(tf => coin.confidence[tf]?.action === filterSignal);
     })
     .sort((a: CoinListItem, b: CoinListItem) => {
@@ -549,7 +547,6 @@ export default function CoinList() {
                 <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">Coin</th>
                 <th className="px-6 py-4 text-right text-sm font-medium text-gray-300">Price</th>
                 <th className="px-6 py-4 text-right text-sm font-medium text-gray-300">24h Change</th>
-                <th className="px-6 py-4 text-center text-sm font-medium text-gray-300">1m</th>
                 <th className="px-6 py-4 text-center text-sm font-medium text-gray-300">5m</th>
                 <th className="px-6 py-4 text-center text-sm font-medium text-gray-300">15m</th>
                 <th className="px-6 py-4 text-center text-sm font-medium text-gray-300">1h</th>
@@ -581,9 +578,6 @@ export default function CoinList() {
                     }`}>
                       {formatPercentage(coin.priceChange24h)}
                     </span>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    {getSignalDisplay(coin.confidence['1m'])}
                   </td>
                   <td className="px-6 py-4 text-center">
                     {getSignalDisplay(coin.confidence['5m'])}

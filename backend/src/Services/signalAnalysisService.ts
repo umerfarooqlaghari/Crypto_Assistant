@@ -1,7 +1,7 @@
 import { TechnicalIndicatorService, TechnicalIndicators } from './technicalIndicatorService';
+import { AdvancedTechnicalAnalysis } from './advancedTechnicalAnalysis';
 import { getOHLCVFromExchange } from './ccxtService';
 import { logSignalGeneration, logDebug, logError } from '../utils/logger';
-import { config } from '../config/config';
 
 export interface SignalResult {
   signal: 'BUY' | 'SELL' | 'HOLD';
@@ -40,9 +40,11 @@ export interface MultiTimeframeSignal {
 
 export class SignalAnalysisService {
   private technicalService: TechnicalIndicatorService;
+  private advancedTechnicalAnalysis: AdvancedTechnicalAnalysis;
 
   constructor() {
     this.technicalService = new TechnicalIndicatorService();
+    this.advancedTechnicalAnalysis = new AdvancedTechnicalAnalysis();
   }
 
   // Generate basic signals (legacy compatibility)
@@ -111,50 +113,62 @@ export class SignalAnalysisService {
     try {
       logDebug(`Generating technical signals for ${symbol} on ${exchange}`, { timeframe });
 
-      // Get technical indicators
+      // Get OHLCV data for pattern analysis
+      const ohlcv = await getOHLCVFromExchange(exchange, symbol, timeframe, 100);
+
+      // Get technical indicators (convert to advanced format)
       const indicators = await this.technicalService.calculateIndicators(exchange, symbol, timeframe);
-      const signalStrength = this.technicalService.getSignalStrength(indicators);
+      const advancedIndicators = {
+        rsi: indicators.rsi,
+        macd: {
+          MACD: indicators.macd.macd,
+          signal: indicators.macd.signal,
+          histogram: indicators.macd.histogram
+        },
+        bollingerBands: indicators.bollingerBands,
+        ema20: indicators.movingAverages.ema12, // Use available EMA
+        ema50: indicators.movingAverages.ema26  // Use available EMA
+      };
+
+      // Detect chart patterns
+      const chartPatterns = this.advancedTechnicalAnalysis.detectChartPatterns(ohlcv, advancedIndicators);
+
+      // Detect candlestick patterns
+      const candlestickPatterns = this.advancedTechnicalAnalysis.detectCandlestickPatterns(ohlcv);
+
+      // Get current price
+      const currentPrice = ohlcv[ohlcv.length - 1][4]; // Close price of last candle
+
+      // Generate trading signal using advanced analysis
+      const tradingSignal = this.advancedTechnicalAnalysis.generateTradingSignal(
+        currentPrice,
+        advancedIndicators,
+        chartPatterns,
+        candlestickPatterns
+      );
 
       // Get price action analysis
       const priceAction = await this.analyzePriceAction(exchange, symbol, timeframe);
 
-      // Combine signals
-      const combinedStrength = (signalStrength.strength + priceAction.momentum) / 2;
-      
-      let signal: 'BUY' | 'SELL' | 'HOLD';
-      if (combinedStrength > 30) {
-        signal = 'BUY';
-      } else if (combinedStrength < -30) {
-        signal = 'SELL';
-      } else {
-        signal = 'HOLD';
-      }
-
-      // Calculate confidence based on signal agreement
-      const confidence = Math.min(signalStrength.confidence + 0.2, 1.0);
-
       // Determine risk level
       const riskLevel = this.calculateRiskLevel(indicators, priceAction);
 
-      // Combine reasoning
-      const reasoning = [
-        ...signalStrength.signals,
-        `Trend: ${priceAction.trend}`,
-        `Volatility: ${priceAction.volatility.toFixed(2)}%`,
-      ];
-
       const result: SignalResult = {
-        signal,
-        confidence,
-        strength: Math.abs(combinedStrength),
-        reasoning,
+        signal: tradingSignal.action,
+        confidence: tradingSignal.confidence / 100, // Convert to decimal
+        strength: tradingSignal.strength,
+        reasoning: tradingSignal.reasoning,
         technicalIndicators: indicators,
         priceAction,
         riskLevel,
         timestamp: new Date().toISOString(),
+        // Include pattern data
+        chartPatterns,
+        candlestickPatterns,
+        currentPrice
       };
 
-      logSignalGeneration(symbol, timeframe, signal, confidence);
+      logSignalGeneration(symbol, timeframe, tradingSignal.action, tradingSignal.confidence / 100);
       return result;
     } catch (error) {
       logError(`Error generating technical signals for ${symbol}`, error as Error);
@@ -236,7 +250,7 @@ export class SignalAnalysisService {
   async generateMultiTimeframeSignals(
     exchange: string,
     symbol: string,
-    timeframes: string[] = ['1m', '15m', '1h', '4h']
+    timeframes: string[] = ['15m', '1h', '4h']
   ): Promise<MultiTimeframeSignal> {
     try {
       logDebug(`Generating multi-timeframe signals for ${symbol}`, { timeframes });

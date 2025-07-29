@@ -147,7 +147,7 @@ DATA REQUIREMENTS
 
 TIMEFRAME SUPPORT
 ===============================================================================
-- 1m, 5m, 15m, 1h, 4h, 1d
+- 5m, 15m, 1h, 4h, 1d
 - Each timeframe analyzed independently
 - Same algorithm applied across all timeframes
 - Results may vary significantly between timeframes

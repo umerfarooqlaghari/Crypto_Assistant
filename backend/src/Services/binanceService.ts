@@ -39,7 +39,15 @@ export interface BinanceTicker {
 export class BinanceService {
   private baseURL = 'https://api.binance.com/api/v3';
   private wsBaseURL = 'wss://stream.binance.com:9443/ws';
+  private combinedStreamURL = 'wss://stream.binance.com:9443/stream';
+
+  // Combined WebSocket connections (6 total instead of 150+)
+  private combinedTickerWS: WebSocket | null = null;
+  private combinedKlineWS: Map<string, WebSocket> = new Map(); // One per timeframe
+
+  // Legacy individual connections (kept for compatibility during transition)
   private wsConnections: Map<string, WebSocket> = new Map();
+
   private allTickersCache: Map<string, BinanceTicker> = new Map();
   private subscribers: Map<string, Set<(data: any) => void>> = new Map();
   private isAllTickersConnected = false;
@@ -49,18 +57,269 @@ export class BinanceService {
   private klineCache: Map<string, number[][]> = new Map(); // key: symbol_timeframe, value: OHLCV array
   private klineSubscribers: Map<string, Set<(ohlcv: number[][]) => void>> = new Map();
   private klineConnections: Map<string, WebSocket> = new Map();
-  private readonly MAX_KLINE_BUFFER = 75; // Keep 75 candles in buffer (reduced from 200 for bandwidth optimization)
+  private readonly MAX_KLINE_BUFFER = 65; // Keep 65 candles in buffer
 
   // Track API usage statistics
   private cacheHits = 0;
   private restApiCalls = 0; // Track REST API calls for monitoring
 
-  // Tracked symbols for selective WebSocket streams
+  // Tracked symbols for combined streams
   private trackedSymbols: Set<string> = new Set();
+  private activeTimeframes: Set<string> = new Set();
+
+  // Smart reconnection state
+  private reconnectionState: Map<string, {
+    attempts: number;
+    nextDelay: number;
+    lastAttempt: number;
+    isReconnecting: boolean;
+  }> = new Map();
 
   constructor() {
-    this.initializeSelectiveTickersStream();
-    this.initializeCuratedCoinsStreams();
+    this.initializeCombinedStreams();
+  }
+
+  // Smart reconnection helper methods
+  private getReconnectionState(connectionKey: string) {
+    if (!this.reconnectionState.has(connectionKey)) {
+      this.reconnectionState.set(connectionKey, {
+        attempts: 0,
+        nextDelay: 1000, // Start with 1 second
+        lastAttempt: 0,
+        isReconnecting: false
+      });
+    }
+    return this.reconnectionState.get(connectionKey)!;
+  }
+
+  private calculateBackoffDelay(attempts: number): number {
+    // Exponential backoff: 1s → 2s → 4s → 8s → 16s → 32s → 60s (max)
+    const baseDelay = 1000;
+    const maxDelay = 60000; // 60 seconds max
+    const delay = Math.min(baseDelay * Math.pow(2, attempts), maxDelay);
+    return delay;
+  }
+
+  private resetReconnectionState(connectionKey: string) {
+    this.reconnectionState.set(connectionKey, {
+      attempts: 0,
+      nextDelay: 1000,
+      lastAttempt: 0,
+      isReconnecting: false
+    });
+  }
+
+  private shouldAttemptReconnection(connectionKey: string): boolean {
+    const state = this.getReconnectionState(connectionKey);
+    const now = Date.now();
+
+    // Don't attempt if already reconnecting
+    if (state.isReconnecting) {
+      return false;
+    }
+
+    // Don't attempt if not enough time has passed since last attempt
+    if (now - state.lastAttempt < state.nextDelay) {
+      return false;
+    }
+
+    // Don't attempt if too many failed attempts (max 10)
+    if (state.attempts >= 10) {
+      logError(`Max reconnection attempts reached for ${connectionKey}`, new Error('Max reconnection attempts'));
+      return false;
+    }
+
+    return true;
+  }
+
+  // Initialize combined streams (replaces individual connections)
+  private async initializeCombinedStreams() {
+    try {
+      logInfo('🚀 Initializing Binance Combined Streams (6 connections instead of 150+)');
+
+      // Import the curated coins list
+      const { fetchTop30CoinsFromWebSocket } = await import('../config/coinConfig');
+      const curatedCoins = await fetchTop30CoinsFromWebSocket();
+
+      // Add all curated coins to tracking
+      curatedCoins.forEach(symbol => this.trackedSymbols.add(symbol));
+
+      // Initialize combined ticker stream for all tracked symbols
+      this.initializeCombinedTickerStream();
+
+      // Initialize combined kline streams for each timeframe
+      const timeframes = ['5m', '15m', '1h', '4h', '1d'];
+      timeframes.forEach(timeframe => {
+        this.activeTimeframes.add(timeframe);
+        this.initializeCombinedKlineStream(timeframe);
+      });
+
+      logInfo(`✅ Successfully initialized combined streams for ${curatedCoins.length} coins and ${timeframes.length} timeframes`);
+    } catch (error) {
+      logError('Failed to initialize combined streams', error as Error);
+    }
+  }
+
+  // Initialize combined ticker stream for all tracked symbols
+  private initializeCombinedTickerStream() {
+    if (this.trackedSymbols.size === 0) {
+      logInfo('No symbols to track for ticker stream');
+      return;
+    }
+
+    const symbols = Array.from(this.trackedSymbols);
+    const streams = symbols.map(symbol => `${symbol.toLowerCase()}@ticker`);
+    const streamUrl = `${this.combinedStreamURL}?streams=${streams.join('/')}`;
+
+    logInfo(`🔌 Connecting to combined ticker stream for ${symbols.length} symbols`);
+
+    const ws = new WebSocket(streamUrl);
+    const connectionKey = 'combined_ticker';
+
+    ws.on('open', () => {
+      logInfo(`✅ Connected to combined ticker stream for ${symbols.length} symbols`);
+      this.isAllTickersConnected = true;
+      this.resetReconnectionState(connectionKey);
+    });
+
+    ws.on('message', (data: WebSocket.Data) => {
+      try {
+        const message = JSON.parse(data.toString());
+        this.handleCombinedTickerMessage(message);
+      } catch (error) {
+        logError('Error parsing combined ticker message', error as Error);
+      }
+    });
+
+    ws.on('error', (error) => {
+      logError('Combined ticker WebSocket error', error);
+    });
+
+    ws.on('close', () => {
+      logInfo('Combined ticker WebSocket closed, attempting smart reconnection...');
+      this.isAllTickersConnected = false;
+      this.combinedTickerWS = null;
+      this.attemptSmartReconnection(connectionKey, () => this.initializeCombinedTickerStream());
+    });
+
+    this.combinedTickerWS = ws;
+  }
+
+  // Initialize combined kline stream for a specific timeframe
+  private initializeCombinedKlineStream(timeframe: string) {
+    if (this.trackedSymbols.size === 0) {
+      logInfo(`No symbols to track for ${timeframe} kline stream`);
+      return;
+    }
+
+    const symbols = Array.from(this.trackedSymbols);
+    const interval = this.convertTimeframeToInterval(timeframe);
+    const streams = symbols.map(symbol => `${symbol.toLowerCase()}@kline_${interval}`);
+    const streamUrl = `${this.combinedStreamURL}?streams=${streams.join('/')}`;
+
+    logInfo(`🔌 Connecting to combined ${timeframe} kline stream for ${symbols.length} symbols`);
+
+    const ws = new WebSocket(streamUrl);
+    const connectionKey = `combined_kline_${timeframe}`;
+
+    ws.on('open', () => {
+      logInfo(`✅ Connected to combined ${timeframe} kline stream for ${symbols.length} symbols`);
+      this.resetReconnectionState(connectionKey);
+    });
+
+    ws.on('message', (data: WebSocket.Data) => {
+      try {
+        const message = JSON.parse(data.toString());
+        this.handleCombinedKlineMessage(message, timeframe);
+      } catch (error) {
+        logError(`Error parsing combined ${timeframe} kline message`, error as Error);
+      }
+    });
+
+    ws.on('error', (error) => {
+      logError(`Combined ${timeframe} kline WebSocket error`, error);
+    });
+
+    ws.on('close', () => {
+      logInfo(`Combined ${timeframe} kline WebSocket closed, attempting smart reconnection...`);
+      this.combinedKlineWS.delete(timeframe);
+      this.attemptSmartReconnection(connectionKey, () => this.initializeCombinedKlineStream(timeframe));
+    });
+
+    this.combinedKlineWS.set(timeframe, ws);
+  }
+
+  // Handle combined ticker stream messages
+  private handleCombinedTickerMessage(message: any) {
+    if (!message.data) {
+      return;
+    }
+
+    const ticker = message.data;
+
+    // Validate ticker data
+    if (!ticker.s || !ticker.s.endsWith('USDT') ||
+        ticker.s.includes('UP') || ticker.s.includes('DOWN') ||
+        ticker.s.includes('BULL') || ticker.s.includes('BEAR')) {
+      return;
+    }
+
+    const tickerData: BinanceTicker = {
+      symbol: ticker.s,
+      price: ticker.c,
+      priceChangePercent: ticker.P,
+      volume: ticker.v,
+      high: ticker.h,
+      low: ticker.l
+    };
+
+    // Update cache
+    this.allTickersCache.set(ticker.s, tickerData);
+
+    // Notify individual symbol subscribers
+    this.notifySubscribers(ticker.s, tickerData);
+
+    // Notify all-tickers subscribers
+    this.notifyAllTickersSubscribers();
+  }
+
+  // Handle combined kline stream messages
+  private handleCombinedKlineMessage(message: any, timeframe: string) {
+    if (!message.data || !message.data.k) {
+      return;
+    }
+
+    const klineData = message.data.k;
+    const symbol = klineData.s;
+
+    // Use existing kline update logic
+    this.handleKlineUpdate(symbol, timeframe, message.data);
+  }
+
+  // Smart reconnection with exponential backoff
+  private attemptSmartReconnection(connectionKey: string, reconnectFunction: () => void) {
+    if (!this.shouldAttemptReconnection(connectionKey)) {
+      return;
+    }
+
+    const state = this.getReconnectionState(connectionKey);
+    state.isReconnecting = true;
+    state.attempts++;
+    state.lastAttempt = Date.now();
+    state.nextDelay = this.calculateBackoffDelay(state.attempts);
+
+    logInfo(`🔄 Attempting reconnection for ${connectionKey} (attempt ${state.attempts}, next delay: ${state.nextDelay}ms)`);
+
+    setTimeout(() => {
+      try {
+        reconnectFunction();
+        state.isReconnecting = false;
+      } catch (error) {
+        logError(`Reconnection failed for ${connectionKey}`, error as Error);
+        state.isReconnecting = false;
+        // Will try again based on shouldAttemptReconnection logic
+      }
+    }, state.nextDelay);
   }
 
   // Subscribe to kline data for a specific symbol and timeframe
@@ -144,15 +403,15 @@ export class BinanceService {
     });
 
     ws.on('close', () => {
-      logInfo(`Kline WebSocket connection closed for ${symbol} ${timeframe}, attempting to reconnect...`);
+      logInfo(`Kline WebSocket connection closed for ${symbol} ${timeframe}, attempting smart reconnection...`);
       this.klineConnections.delete(key);
 
-      // Reconnect after 5 seconds
-      setTimeout(() => {
+      // Use smart reconnection instead of aggressive 5-second retry
+      this.attemptSmartReconnection(`kline_${key}`, () => {
         if (!this.klineConnections.has(key)) {
           this.startKlineWebSocketStream(symbol, timeframe);
         }
-      }, 5000);
+      });
     });
 
     this.klineConnections.set(key, ws);
@@ -578,6 +837,35 @@ export class BinanceService {
     };
   }
 
+  // Get connection statistics
+  getConnectionStats(): {
+    combinedStreams: number;
+    legacyConnections: number;
+    totalConnections: number;
+    trackedSymbols: number;
+    activeTimeframes: number;
+    reconnectionAttempts: { [key: string]: number };
+  } {
+    const combinedStreams = (this.combinedTickerWS ? 1 : 0) + this.combinedKlineWS.size;
+    const legacyConnections = this.wsConnections.size + this.klineConnections.size;
+
+    const reconnectionAttempts: { [key: string]: number } = {};
+    this.reconnectionState.forEach((state, key) => {
+      if (state.attempts > 0) {
+        reconnectionAttempts[key] = state.attempts;
+      }
+    });
+
+    return {
+      combinedStreams,
+      legacyConnections,
+      totalConnections: combinedStreams + legacyConnections,
+      trackedSymbols: this.trackedSymbols.size,
+      activeTimeframes: this.activeTimeframes.size,
+      reconnectionAttempts
+    };
+  }
+
   // Initialize WebSocket connection for selective symbol streams (optimized approach)
   private initializeSelectiveTickersStream() {
     logInfo('Initializing Binance WebSocket selective symbol streams (bandwidth optimized)');
@@ -604,7 +892,7 @@ export class BinanceService {
     }
   }
 
-  // Add symbols to be tracked via WebSocket streams
+  // Add symbols to be tracked via combined WebSocket streams
   public addTrackedSymbols(symbols: string[]): void {
     const newSymbols: string[] = [];
 
@@ -616,9 +904,35 @@ export class BinanceService {
     });
 
     if (newSymbols.length > 0) {
-      logInfo(`Adding ${newSymbols.length} new symbols to WebSocket tracking: ${newSymbols.join(', ')}`);
-      this.subscribeToSelectiveSymbols(newSymbols);
+      logInfo(`🔄 Adding ${newSymbols.length} new symbols to combined streams: ${newSymbols.join(', ')}`);
+
+      // Restart combined streams to include new symbols
+      this.restartCombinedStreams();
     }
+  }
+
+  // Restart combined streams with updated symbol list
+  private restartCombinedStreams(): void {
+    logInfo('🔄 Restarting combined streams with updated symbol list...');
+
+    // Close existing combined connections
+    if (this.combinedTickerWS) {
+      this.combinedTickerWS.close();
+      this.combinedTickerWS = null;
+    }
+
+    this.combinedKlineWS.forEach((ws, timeframe) => {
+      ws.close();
+    });
+    this.combinedKlineWS.clear();
+
+    // Restart with new symbol list
+    setTimeout(() => {
+      this.initializeCombinedTickerStream();
+      this.activeTimeframes.forEach(timeframe => {
+        this.initializeCombinedKlineStream(timeframe);
+      });
+    }, 1000); // Small delay to ensure clean shutdown
   }
 
   // Subscribe to selective symbols using individual streams for reliability
@@ -691,15 +1005,15 @@ export class BinanceService {
     });
 
     ws.on('close', () => {
-      logInfo(`Ticker WebSocket connection closed for ${symbol}, attempting to reconnect...`);
+      logInfo(`Ticker WebSocket connection closed for ${symbol}, attempting smart reconnection...`);
       this.wsConnections.delete(connectionKey);
 
-      // Reconnect after 5 seconds
-      setTimeout(() => {
+      // Use smart reconnection instead of aggressive 5-second retry
+      this.attemptSmartReconnection(`ticker_${symbol}`, () => {
         if (!this.wsConnections.has(connectionKey)) {
           this.createIndividualTickerStream(symbol);
         }
-      }, 5000);
+      });
     });
 
     this.wsConnections.set(connectionKey, ws);
@@ -764,9 +1078,13 @@ export class BinanceService {
     });
 
     ws.on('close', () => {
-      logInfo(`Binance WebSocket connection closed for ${symbol}, attempting to reconnect...`);
+      logInfo(`Binance WebSocket connection closed for ${symbol}, attempting smart reconnection...`);
       this.wsConnections.delete(connectionKey);
-      setTimeout(() => this.subscribeToIndividualTicker(symbol), 5000);
+
+      // Use smart reconnection instead of aggressive 5-second retry
+      this.attemptSmartReconnection(`individual_ticker_${symbol}`, () => {
+        this.subscribeToIndividualTicker(symbol);
+      });
     });
 
     this.wsConnections.set(connectionKey, ws);
@@ -824,11 +1142,44 @@ export class BinanceService {
 
   // Close all WebSocket connections
   closeConnections() {
+    // Close combined streams
+    if (this.combinedTickerWS) {
+      this.combinedTickerWS.close();
+      this.combinedTickerWS = null;
+      logInfo('Closed combined ticker WebSocket');
+    }
+
+    this.combinedKlineWS.forEach((ws, timeframe) => {
+      ws.close();
+      logInfo(`Closed combined ${timeframe} kline WebSocket`);
+    });
+    this.combinedKlineWS.clear();
+
+    // Close legacy individual connections
     this.wsConnections.forEach((ws, key) => {
       ws.close();
       logInfo(`Closed WebSocket connection: ${key}`);
     });
     this.wsConnections.clear();
+
+    // Close kline connections
+    this.klineConnections.forEach((ws, key) => {
+      ws.close();
+      logInfo(`Closed kline WebSocket connection: ${key}`);
+    });
+    this.klineConnections.clear();
+
+    // Clear subscribers and caches
     this.subscribers.clear();
+    this.allTickersSubscribers.clear();
+    this.klineSubscribers.clear();
+    this.allTickersCache.clear();
+    this.klineCache.clear();
+
+    // Reset connection state
+    this.isAllTickersConnected = false;
+    this.reconnectionState.clear();
+
+    logInfo('🔌 All WebSocket connections closed and caches cleared');
   }
 }

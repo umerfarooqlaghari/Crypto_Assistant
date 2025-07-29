@@ -13,7 +13,7 @@ const TOP_30_BEST_COINS = [
   'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'XRPUSDT', 'SOLUSDT', 'ADAUSDT', 'DOGEUSDT', 'TRXUSDT', 'AVAXUSDT', 'LINKUSDT',
 
   // Top 11-20 - Major altcoins with strong fundamentals
-  'DOTUSDT', 'MATICUSDT', 'LTCUSDT', 'SHIBUSDT', 'UNIUSDT', 'ATOMUSDT', 'XLMUSDT', 'VETUSDT', 'FILUSDT', 'ICPUSDT',
+  'DOTUSDT', 'LTCUSDT', 'SHIBUSDT', 'UNIUSDT', 'ATOMUSDT', 'XLMUSDT', 'VETUSDT', 'FILUSDT', 'ICPUSDT', 'HBARUSDT',
 
   // Top 21-30 - Established projects with good liquidity
   'ETCUSDT', 'NEARUSDT', 'ALGOUSDT', 'MANAUSDT', 'SANDUSDT', 'AXSUSDT', 'FLOWUSDT', 'EGLDUSDT', 'XTZUSDT', 'CHZUSDT'
@@ -65,7 +65,7 @@ export const EXCLUDED_COINS = [
 ];
 
 // Supported timeframes for analysis
-export const SUPPORTED_TIMEFRAMES = ['1m', '5m', '15m', '1h', '4h', '1d'];
+export const SUPPORTED_TIMEFRAMES = ['5m', '15m', '1h', '4h', '1d'];
 
 // Get all coins that should be tracked (top 30 from WebSocket)
 export async function getAllTrackedCoins(): Promise<string[]> {

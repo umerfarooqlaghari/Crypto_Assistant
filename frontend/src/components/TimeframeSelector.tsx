@@ -7,7 +7,6 @@ interface TimeframeSelectorProps {
 
 export default function TimeframeSelector({ selectedTimeframe, onTimeframeChange }: TimeframeSelectorProps) {
   const timeframes = [
-    { value: '1m', label: '1m', description: '1 Minute' },
     { value: '5m', label: '5m', description: '5 Minutes' },
     { value: '15m', label: '15m', description: '15 Minutes' },
     { value: '1h', label: '1h', description: '1 Hour' },

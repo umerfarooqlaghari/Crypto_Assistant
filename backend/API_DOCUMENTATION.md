@@ -205,7 +205,7 @@ All errors return JSON with the following structure:
 - KuCoin (sandbox issues)
 
 ### Timeframes
-- 1m, 3m, 5m, 15m
+- 3m, 5m, 15m
 - 1h, 2h, 4h, 6h, 8h, 12h
 - 1d, 3d, 1w, 1M
 
@@ -291,7 +291,7 @@ curl http://localhost:5001/api/exchange-prices/binance
 
 ## Next Features (Planned)
 
-1. **Candle Data Endpoints** (1m, 15m, 1h, 4h)
+1. **Candle Data Endpoints** (5m, 15m, 1h, 4h)
 2. **Exit Signal Logic** (gain targets, overbought RSI, MACD bearish)
 3. **Trailing Stop Strategy**
 4. **Confidence-Based Take Profit**

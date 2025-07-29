@@ -3,6 +3,7 @@ import { Server as HTTPServer } from 'http';
 import cron from 'node-cron';
 import { BinanceService } from './binanceService';
 import { AdvancedTechnicalAnalysis, TradingSignal } from './advancedTechnicalAnalysis';
+import { serviceManager } from './serviceManager';
 import { logDebug, logError, logInfo } from '../utils/logger';
 import { config } from '../config/config';
 
@@ -46,13 +47,14 @@ export class RealTimeDataService {
       transports: ['websocket', 'polling']
     });
 
-    this.binanceService = new BinanceService();
-    this.technicalAnalysis = new AdvancedTechnicalAnalysis();
+    // Use shared services from ServiceManager to avoid duplicate WebSocket connections
+    this.binanceService = serviceManager.getBinanceService();
+    this.technicalAnalysis = serviceManager.getTechnicalAnalysisService();
 
     this.initializeSocketHandlers();
     this.startDataUpdates();
-    
-    logInfo('Real-time data service initialized');
+
+    logInfo('Real-time data service initialized with shared services');
   }
 
   // Getter for socket.io instance
@@ -68,7 +70,7 @@ export class RealTimeDataService {
       this.subscriptions.set(socket.id, {
         socketId: socket.id,
         symbols: new Set(),
-        timeframes: new Set(['1m', '5m', '15m', '4h'])
+        timeframes: new Set(['5m', '15m', '4h'])
       });
 
       // Handle symbol subscription

@@ -293,10 +293,10 @@ export class NotificationRuleChecker {
           isRead: false,
           // Store technical analysis data
           technicalIndicators: isMultiTimeframe ? multiTimeframeAnalysis : technicalIndicators,
-          chartPatterns: isMultiTimeframe ? null : chartPatterns,
-          candlestickPatterns: isMultiTimeframe ? null : candlestickPatterns,
+          chartPatterns: isMultiTimeframe ? this.aggregateChartPatterns(multiTimeframeAnalysis) : chartPatterns,
+          candlestickPatterns: isMultiTimeframe ? this.aggregateCandlestickPatterns(multiTimeframeAnalysis) : candlestickPatterns,
           triggeredTimeframes: triggeredTimeframes,
-          analysisReasoning: isMultiTimeframe ? null : analysisReasoning,
+          analysisReasoning: isMultiTimeframe ? this.aggregateReasoning(multiTimeframeAnalysis) : analysisReasoning,
           currentPrice,
           exchange: 'binance'
         }
@@ -470,6 +470,58 @@ export class NotificationRuleChecker {
     } catch (error) {
       logError('Error in force check rules', error as Error);
     }
+  }
+
+  // Helper methods for aggregating multi-timeframe data
+  private aggregateChartPatterns(multiTimeframeAnalysis: any): any[] | undefined {
+    const allPatterns: any[] = [];
+
+    Object.keys(multiTimeframeAnalysis).forEach(tf => {
+      const analysis = multiTimeframeAnalysis[tf];
+      if (analysis.chartPatterns && Array.isArray(analysis.chartPatterns)) {
+        analysis.chartPatterns.forEach((pattern: any) => {
+          allPatterns.push({
+            ...pattern,
+            timeframe: tf
+          });
+        });
+      }
+    });
+
+    return allPatterns.length > 0 ? allPatterns : undefined;
+  }
+
+  private aggregateCandlestickPatterns(multiTimeframeAnalysis: any): any[] | undefined {
+    const allPatterns: any[] = [];
+
+    Object.keys(multiTimeframeAnalysis).forEach(tf => {
+      const analysis = multiTimeframeAnalysis[tf];
+      if (analysis.candlestickPatterns && Array.isArray(analysis.candlestickPatterns)) {
+        analysis.candlestickPatterns.forEach((pattern: any) => {
+          allPatterns.push({
+            ...pattern,
+            timeframe: tf
+          });
+        });
+      }
+    });
+
+    return allPatterns.length > 0 ? allPatterns : undefined;
+  }
+
+  private aggregateReasoning(multiTimeframeAnalysis: any): string[] | undefined {
+    const allReasoning: string[] = [];
+
+    Object.keys(multiTimeframeAnalysis).forEach(tf => {
+      const analysis = multiTimeframeAnalysis[tf];
+      if (analysis.reasoning && Array.isArray(analysis.reasoning)) {
+        analysis.reasoning.forEach((reason: string) => {
+          allReasoning.push(`${tf}: ${reason}`);
+        });
+      }
+    });
+
+    return allReasoning.length > 0 ? allReasoning : undefined;
   }
 }
 

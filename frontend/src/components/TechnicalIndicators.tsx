@@ -23,132 +23,76 @@ interface TechnicalIndicatorsProps {
 }
 
 export default function TechnicalIndicators({ indicators, currentPrice, compact = false }: TechnicalIndicatorsProps) {
-  // Calculate points for each indicator based on the existing scoring system
-  const calculateIndicatorPoints = () => {
-    const indicatorScores = [];
+  // Calculate indicator data based on the same logic as compact section
+  const calculateIndicatorData = () => {
+    const indicatorData = [];
 
-    // RSI analysis (25 points for extreme conditions, show current value for neutral)
-    let rsiPoints = 0;
+    // RSI analysis - same logic as compact section
     let rsiStatus = '';
-    if (indicators.rsi < 30) {
-      rsiPoints = 25;
-      rsiStatus = 'BULLISH';
-    } else if (indicators.rsi > 70) {
-      rsiPoints = 25;
+    if (indicators.rsi > 70) {
       rsiStatus = 'BEARISH';
+    } else if (indicators.rsi < 30) {
+      rsiStatus = 'BULLISH';
     } else {
-      // For neutral RSI, show relative strength based on distance from 50
-      const distanceFrom50 = Math.abs(indicators.rsi - 50);
-      rsiPoints = Math.round(distanceFrom50 / 2); // 0-25 points based on how far from neutral
-      if (indicators.rsi > 50) {
-        rsiStatus = 'BULLISH';
-      } else {
-        rsiStatus = 'BEARISH';
-      }
+      rsiStatus = 'NEUTRAL';
     }
-    indicatorScores.push({
+    indicatorData.push({
       name: 'RSI',
-      points: rsiPoints,
       status: rsiStatus,
       type: 'rsi'
     });
 
-    // MACD analysis (20 points for clear signals, scaled for strength)
-    let macdPoints = 0;
+    // MACD analysis - same logic as compact section
     let macdStatus = '';
-    const macdDiff = indicators.macd.MACD - indicators.macd.signal;
-    const histogramAbs = Math.abs(indicators.macd.histogram);
-
-    if (indicators.macd.MACD > indicators.macd.signal && indicators.macd.histogram > 0) {
-      // Strong bullish signal gets full 20 points
-      macdPoints = 20;
+    if (indicators.macd?.MACD > indicators.macd?.signal) {
       macdStatus = 'BULLISH';
-    } else if (indicators.macd.MACD < indicators.macd.signal && indicators.macd.histogram < 0) {
-      // Strong bearish signal gets full 20 points
-      macdPoints = 20;
-      macdStatus = 'BEARISH';
     } else {
-      // Weak signals get scaled points based on histogram strength
-      macdPoints = Math.min(Math.round(histogramAbs * 10000), 15); // Scale histogram to 0-15 points
-      if (macdDiff > 0) {
-        macdStatus = 'BULLISH';
-      } else {
-        macdStatus = 'BEARISH';
-      }
+      macdStatus = 'BEARISH';
     }
-    indicatorScores.push({
+    indicatorData.push({
       name: 'MACD',
-      points: macdPoints,
       status: macdStatus,
       type: 'macd'
     });
 
-
-
-    // EMA analysis (15 points)
-    let emaPoints = 0;
+    // EMA analysis - same logic as compact section
     let emaStatus = '';
     if (indicators.ema20 > indicators.ema50) {
-      emaPoints = 15;
       emaStatus = 'BULLISH';
     } else {
-      emaPoints = 15;
       emaStatus = 'BEARISH';
     }
-    indicatorScores.push({
+    indicatorData.push({
       name: 'EMA Trend',
-      points: emaPoints,
       status: emaStatus,
       type: 'ema'
     });
 
-
-
-    // Bollinger Bands analysis (25 points for extreme, scaled for position within bands)
-    let bbPoints = 0;
+    // Bollinger Bands analysis - same logic as compact section
     let bbStatus = '';
     if (currentPrice && indicators.bollingerBands) {
       const { upper, lower } = indicators.bollingerBands;
-
       if (currentPrice > upper) {
-        bbPoints = 25;
         bbStatus = 'BEARISH';
       } else if (currentPrice < lower) {
-        bbPoints = 25;
         bbStatus = 'BULLISH';
       } else {
-        // Calculate position within bands and assign points accordingly
-        const bandWidth = upper - lower;
-        const pricePosition = (currentPrice - lower) / bandWidth; // 0 to 1
-
-        if (pricePosition > 0.5) {
-          // Above middle line - bearish tendency
-          bbPoints = Math.round((pricePosition - 0.5) * 2 * 20); // 0-20 points
-          bbStatus = 'BEARISH';
-        } else {
-          // Below middle line - bullish tendency
-          bbPoints = Math.round((0.5 - pricePosition) * 2 * 20); // 0-20 points
-          bbStatus = 'BULLISH';
-        }
+        bbStatus = 'NEUTRAL';
       }
+    } else {
+      bbStatus = 'NEUTRAL';
     }
-    indicatorScores.push({
+    indicatorData.push({
       name: 'Bollinger Bands',
-      points: bbPoints,
       status: bbStatus,
       type: 'bollinger'
     });
 
-    // Sort by points (highest first), then by name for consistency
-    return indicatorScores.sort((a, b) => {
-      if (b.points !== a.points) {
-        return b.points - a.points;
-      }
-      return a.name.localeCompare(b.name);
-    });
+    // Return in fixed order (no sorting) to match compact section order
+    return indicatorData;
   };
 
-  const sortedIndicators = calculateIndicatorPoints();
+  const indicatorData = calculateIndicatorData();
 
   // Render specific indicator details based on type
   const renderIndicatorDetails = (type: string) => {
@@ -313,17 +257,12 @@ export default function TechnicalIndicators({ indicators, currentPrice, compact 
       )}
 
       <div className="space-y-4">
-        {/* Render indicators sorted by points */}
-        {sortedIndicators.map((indicator) => (
+        {/* Render indicators in fixed order (same as compact section) */}
+        {indicatorData.map((indicator) => (
           <div key={indicator.type} className="p-4 bg-gradient-to-r from-gray-700/20 to-gray-600/10 rounded-lg border border-gray-600/30">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-gray-300">{indicator.name}</span>
-                <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
-                  indicator.points > 0 ? 'bg-blue-900/30 text-blue-400' : 'bg-gray-700/30 text-gray-400'
-                }`}>
-                  {indicator.points} pts
-                </span>
               </div>
               <span className={`text-sm font-semibold ${
                 indicator.status === 'BULLISH' ? 'text-green-400' :

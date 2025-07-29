@@ -48,7 +48,13 @@ export class AdvancedTechnicalAnalysis {
   private binanceService: BinanceService;
 
   constructor(binanceService?: BinanceService) {
-    this.binanceService = binanceService || new BinanceService();
+    if (binanceService) {
+      this.binanceService = binanceService;
+    } else {
+      // Import serviceManager to avoid creating duplicate BinanceService instances
+      const { serviceManager } = require('./serviceManager');
+      this.binanceService = serviceManager.getBinanceService();
+    }
   }
 
   // Calculate top 5 technical indicators using WebSocket cached data

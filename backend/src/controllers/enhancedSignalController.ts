@@ -6,12 +6,21 @@ import { ExchangeError } from '../middleware/errorHandler';
 import { BinanceSymbol } from '../Services/binanceService';
 
 // Lazy initialization to avoid accessing services before ServiceManager is initialized
-const getServices = () => ({
-  binanceService: getBinanceService(),
-  coinGeckoService: getCoinGeckoService(),
-  technicalAnalysis: getTechnicalAnalysisService(),
-  signalOrchestrator: new EnhancedSignalOrchestrator()
-});
+let sharedSignalOrchestrator: EnhancedSignalOrchestrator | null = null;
+
+const getServices = () => {
+  // Create singleton EnhancedSignalOrchestrator to avoid duplicate BinanceService instances
+  if (!sharedSignalOrchestrator) {
+    sharedSignalOrchestrator = new EnhancedSignalOrchestrator();
+  }
+
+  return {
+    binanceService: getBinanceService(),
+    coinGeckoService: getCoinGeckoService(),
+    technicalAnalysis: getTechnicalAnalysisService(),
+    signalOrchestrator: sharedSignalOrchestrator
+  };
+};
 
 // Get all available trading symbols
 export const getAvailableSymbols = async (_req: Request, res: Response) => {
@@ -161,7 +170,7 @@ export const generateAdvancedSignals = async (req: Request, res: Response) => {
 export const getMultiTimeframeAnalysis = async (req: Request, res: Response) => {
     try {
         const { symbol } = req.query;
-        const timeframes = ['1m', '5m', '15m', '4h'];
+        const timeframes = ['5m', '15m', '4h'];
 
         if (!symbol) {
             return res.status(400).json({

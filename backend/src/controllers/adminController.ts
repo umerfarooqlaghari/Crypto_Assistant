@@ -192,7 +192,7 @@ export const createNotificationRule = async (req: Request, res: Response): Promi
         throw new ExchangeError('specificTimeframes must be an array', 'validation');
       }
 
-      const validTimeframes = ['1m', '3m', '5m', '15m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M'];
+      const validTimeframes = ['3m', '5m', '15m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M'];
       const invalidTimeframes = ruleData.specificTimeframes.filter((tf: string) => !validTimeframes.includes(tf));
 
       if (invalidTimeframes.length > 0) {
@@ -234,7 +234,7 @@ export const updateNotificationRule = async (req: Request, res: Response): Promi
         throw new ExchangeError('specificTimeframes must be an array', 'validation');
       }
 
-      const validTimeframes = ['1m', '3m', '5m', '15m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M'];
+      const validTimeframes = ['3m', '5m', '15m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M'];
       const invalidTimeframes = updateData.specificTimeframes.filter((tf: string) => !validTimeframes.includes(tf));
 
       if (invalidTimeframes.length > 0) {

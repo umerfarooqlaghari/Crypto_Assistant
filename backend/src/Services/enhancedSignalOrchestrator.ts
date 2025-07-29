@@ -2,6 +2,7 @@ import ConfigurableSignalService from './configurableSignalService';
 import NotificationEngine from './notificationEngine';
 import prismaService from './prismaService';
 import { BinanceService } from './binanceService';
+import { serviceManager } from './serviceManager';
 import { logInfo, logError, logDebug } from '../utils/logger';
 import { Server as SocketIOServer } from 'socket.io';
 
@@ -32,7 +33,8 @@ export class EnhancedSignalOrchestrator {
   constructor(io?: SocketIOServer) {
     this.configurableSignalService = new ConfigurableSignalService();
     this.notificationEngine = new NotificationEngine(io);
-    this.binanceService = new BinanceService();
+    // Use shared BinanceService from ServiceManager to avoid duplicate WebSocket connections
+    this.binanceService = serviceManager.getBinanceService();
     this.io = io || null;
   }
 
