@@ -58,7 +58,7 @@ export class BinanceService {
   private klineCache: Map<string, number[][]> = new Map(); // key: symbol_timeframe, value: OHLCV array
   private klineSubscribers: Map<string, Set<(ohlcv: number[][]) => void>> = new Map();
   private klineConnections: Map<string, WebSocket> = new Map();
-  private readonly MAX_KLINE_BUFFER = 65; // Keep 65 candles in buffer
+  private readonly MAX_KLINE_BUFFER = 100; // Keep 100 candles in buffer
 
   // Track API usage statistics
   private cacheHits = 0;
