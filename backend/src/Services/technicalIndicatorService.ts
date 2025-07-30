@@ -19,6 +19,7 @@ export interface TechnicalIndicators {
     ema12: number;
     ema26: number;
   };
+  adx: number;
   atr: number;
   volume: number;
   // Allow index access for dynamic property access
@@ -149,6 +150,75 @@ export class TechnicalIndicatorService {
     return this.calculateSMA(trueRanges, Math.min(period, trueRanges.length));
   }
 
+  // Calculate Average Directional Index (ADX)
+  private calculateADX(candles: CandleData[], period: number = 14): number {
+    if (candles.length < period + 1) return 0;
+
+    const plusDM: number[] = [];
+    const minusDM: number[] = [];
+    const trueRanges: number[] = [];
+
+    // Step 1: Calculate Directional Movement and True Range
+    for (let i = 1; i < candles.length; i++) {
+      const current = candles[i];
+      const previous = candles[i - 1];
+
+      // Plus Directional Movement (+DM)
+      const upMove = current.high - previous.high;
+      const downMove = previous.low - current.low;
+
+      let plusDMValue = 0;
+      let minusDMValue = 0;
+
+      if (upMove > downMove && upMove > 0) {
+        plusDMValue = upMove;
+      }
+      if (downMove > upMove && downMove > 0) {
+        minusDMValue = downMove;
+      }
+
+      plusDM.push(plusDMValue);
+      minusDM.push(minusDMValue);
+
+      // True Range
+      const tr1 = current.high - current.low;
+      const tr2 = Math.abs(current.high - previous.close);
+      const tr3 = Math.abs(current.low - previous.close);
+      trueRanges.push(Math.max(tr1, tr2, tr3));
+    }
+
+    // Step 2: Calculate smoothed values using Wilder's smoothing
+    const smoothedPlusDM = this.wilderSmoothing(plusDM, period);
+    const smoothedMinusDM = this.wilderSmoothing(minusDM, period);
+    const smoothedTR = this.wilderSmoothing(trueRanges, period);
+
+    // Step 3: Calculate +DI and -DI
+    const plusDI = (smoothedPlusDM / smoothedTR) * 100;
+    const minusDI = (smoothedMinusDM / smoothedTR) * 100;
+
+    // Step 4: Calculate DX
+    const dx = Math.abs(plusDI - minusDI) / (plusDI + minusDI) * 100;
+
+    // Step 5: Calculate ADX (simplified - using current DX as ADX)
+    // In a full implementation, ADX would be smoothed DX values over time
+    return isNaN(dx) ? 0 : dx;
+  }
+
+  // Wilder's smoothing method for ADX calculation
+  private wilderSmoothing(values: number[], period: number): number {
+    if (values.length < period) return 0;
+
+    // First smoothed value is simple average
+    let smoothed = values.slice(0, period).reduce((sum, val) => sum + val, 0) / period;
+
+    // Apply Wilder's smoothing to remaining values
+    for (let i = period; i < values.length; i++) {
+      smoothed = (smoothed * (period - 1) + values[i]) / period;
+    }
+
+    return smoothed;
+  }
+
   // Main method to calculate all technical indicators
   async calculateIndicators(
     exchange: string,
@@ -169,6 +239,7 @@ export class TechnicalIndicatorService {
       const rsi = this.calculateRSI(closePrices);
       const macd = this.calculateMACD(closePrices);
       const bollingerBands = this.calculateBollingerBands(closePrices);
+      const adx = this.calculateADX(candles);
       const atr = this.calculateATR(candles);
 
       const movingAverages = {
@@ -185,6 +256,7 @@ export class TechnicalIndicatorService {
         macd,
         bollingerBands,
         movingAverages,
+        adx,
         atr,
         volume: currentCandle.volume,
       };

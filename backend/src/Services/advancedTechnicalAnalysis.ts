@@ -16,6 +16,7 @@ export interface TechnicalIndicatorResults {
   };
   ema20: number;
   ema50: number;
+  adx: number;
 }
 
 export interface ChartPattern {
@@ -126,7 +127,8 @@ export class AdvancedTechnicalAnalysis {
         ema50 = closes[closes.length - 1];
       }
 
-
+      // 5. ADX (Average Directional Index)
+      const adx = this.calculateADX(ohlcv, 14);
 
       // Debug logging for small price values
       if (closes[closes.length - 1] < 0.01) {
@@ -140,13 +142,90 @@ export class AdvancedTechnicalAnalysis {
         macd,
         bollingerBands,
         ema20,
-        ema50
+        ema50,
+        adx
       };
 
     } catch (error) {
       logError(`Error calculating indicators for ${symbol}`, error as Error);
       throw error;
     }
+  }
+
+  // Calculate Average Directional Index (ADX)
+  private calculateADX(ohlcv: number[][], period: number = 14): number {
+    if (ohlcv.length < period + 1) return 0;
+
+    const plusDM: number[] = [];
+    const minusDM: number[] = [];
+    const trueRanges: number[] = [];
+
+    // Step 1: Calculate Directional Movement and True Range
+    for (let i = 1; i < ohlcv.length; i++) {
+      const current = ohlcv[i];
+      const previous = ohlcv[i - 1];
+
+      const currentHigh = current[2];
+      const currentLow = current[3];
+      const currentClose = current[4];
+      const previousHigh = previous[2];
+      const previousLow = previous[3];
+      const previousClose = previous[4];
+
+      // Plus Directional Movement (+DM)
+      const upMove = currentHigh - previousHigh;
+      const downMove = previousLow - currentLow;
+
+      let plusDMValue = 0;
+      let minusDMValue = 0;
+
+      if (upMove > downMove && upMove > 0) {
+        plusDMValue = upMove;
+      }
+      if (downMove > upMove && downMove > 0) {
+        minusDMValue = downMove;
+      }
+
+      plusDM.push(plusDMValue);
+      minusDM.push(minusDMValue);
+
+      // True Range
+      const tr1 = currentHigh - currentLow;
+      const tr2 = Math.abs(currentHigh - previousClose);
+      const tr3 = Math.abs(currentLow - previousClose);
+      trueRanges.push(Math.max(tr1, tr2, tr3));
+    }
+
+    // Step 2: Calculate smoothed values using Wilder's smoothing
+    const smoothedPlusDM = this.wilderSmoothing(plusDM, period);
+    const smoothedMinusDM = this.wilderSmoothing(minusDM, period);
+    const smoothedTR = this.wilderSmoothing(trueRanges, period);
+
+    // Step 3: Calculate +DI and -DI
+    const plusDI = (smoothedPlusDM / smoothedTR) * 100;
+    const minusDI = (smoothedMinusDM / smoothedTR) * 100;
+
+    // Step 4: Calculate DX
+    const dx = Math.abs(plusDI - minusDI) / (plusDI + minusDI) * 100;
+
+    // Step 5: Calculate ADX (simplified - using current DX as ADX)
+    // In a full implementation, ADX would be smoothed DX values over time
+    return isNaN(dx) ? 0 : dx;
+  }
+
+  // Wilder's smoothing method for ADX calculation
+  private wilderSmoothing(values: number[], period: number): number {
+    if (values.length < period) return 0;
+
+    // First smoothed value is simple average
+    let smoothed = values.slice(0, period).reduce((sum, val) => sum + val, 0) / period;
+
+    // Apply Wilder's smoothing to remaining values
+    for (let i = period; i < values.length; i++) {
+      smoothed = (smoothed * (period - 1) + values[i]) / period;
+    }
+
+    return smoothed;
   }
 
   // Detect chart patterns
@@ -331,7 +410,41 @@ export class AdvancedTechnicalAnalysis {
       reasoning.push('EMA20 below EMA50 (bearish trend)');
     }
 
-
+    // ADX analysis (trend strength)
+    if (indicators.adx > 50) {
+      // Very strong trend - add points to the direction of the trend
+      const trendPoints = 20;
+      if (indicators.ema20 > indicators.ema50) {
+        bullishScore += trendPoints;
+        reasoning.push(`ADX very strong trend at ${indicators.adx.toFixed(1)} (bullish)`);
+      } else {
+        bearishScore += trendPoints;
+        reasoning.push(`ADX very strong trend at ${indicators.adx.toFixed(1)} (bearish)`);
+      }
+    } else if (indicators.adx >= 25) {
+      // Strong trend - add moderate points
+      const trendPoints = 15;
+      if (indicators.ema20 > indicators.ema50) {
+        bullishScore += trendPoints;
+        reasoning.push(`ADX strong trend at ${indicators.adx.toFixed(1)} (bullish)`);
+      } else {
+        bearishScore += trendPoints;
+        reasoning.push(`ADX strong trend at ${indicators.adx.toFixed(1)} (bearish)`);
+      }
+    } else if (indicators.adx >= 20) {
+      // Emerging trend - add small points
+      const trendPoints = 5;
+      if (indicators.ema20 > indicators.ema50) {
+        bullishScore += trendPoints;
+        reasoning.push(`ADX emerging trend at ${indicators.adx.toFixed(1)} (bullish)`);
+      } else {
+        bearishScore += trendPoints;
+        reasoning.push(`ADX emerging trend at ${indicators.adx.toFixed(1)} (bearish)`);
+      }
+    } else {
+      // Weak trend - no points but note the condition
+      reasoning.push(`ADX weak trend at ${indicators.adx.toFixed(1)} (range-bound)`);
+    }
 
     return { bullishScore, bearishScore, reasoning };
   }

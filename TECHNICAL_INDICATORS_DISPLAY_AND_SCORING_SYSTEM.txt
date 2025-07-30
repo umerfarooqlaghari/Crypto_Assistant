@@ -88,16 +88,36 @@ SCORING SYSTEM FOR EACH INDICATOR
    - Position = (0.7828 - 0.78081431) / (0.82426569 - 0.78081431) = 0.046
    - Since Position < 0.5: Points = (0.5 - 0.046) × 2 × 20 = 18.16 → 18 BULLISH points
 
+5. ADX (AVERAGE DIRECTIONAL INDEX)
+   Maximum Points: 20
+
+   TREND STRENGTH CONDITIONS:
+   - ADX > 50 (Very Strong Trend): 20 points
+   - ADX 25-50 (Strong Trend): 15 points
+   - ADX 20-25 (Emerging Trend): 5 points
+   - ADX < 20 (Weak/No Trend): 0 points
+
+   DIRECTION DETERMINATION:
+   - Points are BULLISH if EMA20 > EMA50
+   - Points are BEARISH if EMA20 < EMA50
+   - If no trend (ADX < 20): NEUTRAL status
+
+   Example:
+   - ADX: 45.2, EMA20 > EMA50
+   - Since ADX 25-50 and uptrend: 15 BULLISH points
+   - Status: "Strong uptrend confirmed"
+
 DISPLAY FORMAT
 ===============================================================================
 
 COMPACT VIEW (Above-the-fold):
 ------------------------------
-Shows 4 indicators in a 2-column grid:
+Shows 5 indicators in a grid layout:
 - RSI: Bullish/Bearish/Neutral
 - MACD: Bullish/Bearish
 - EMA Cross: Bullish/Bearish
 - Bollinger: Bullish/Bearish/Neutral
+- ADX: Bullish/Bearish/Neutral
 
 DETAILED VIEW (Below-the-fold):
 -------------------------------
@@ -115,8 +135,9 @@ Format for each indicator:
 Example Display Order (based on sample data):
 1. MACD - 20 pts - BEARISH
 2. Bollinger Bands - 18 pts - BULLISH
-3. EMA Trend - 15 pts - BEARISH
-4. RSI - 5 pts - BEARISH
+3. ADX - 15 pts - BULLISH
+4. EMA Trend - 15 pts - BEARISH
+5. RSI - 5 pts - BEARISH
 
 COLOR CODING
 ===============================================================================

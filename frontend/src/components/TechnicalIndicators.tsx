@@ -17,6 +17,7 @@ interface TechnicalIndicatorsProps {
     };
     ema20: number;
     ema50: number;
+    adx: number;
   };
   currentPrice?: number;
   compact?: boolean;
@@ -88,6 +89,24 @@ export default function TechnicalIndicators({ indicators, currentPrice, compact 
       type: 'bollinger'
     });
 
+    // ADX analysis - trend strength indicator
+    let adxStatus = '';
+    if (indicators.adx < 20) {
+      adxStatus = 'NEUTRAL'; // Weak/no trend
+    } else {
+      // Direction based on EMA trend
+      if (indicators.ema20 > indicators.ema50) {
+        adxStatus = 'BULLISH'; // Strong uptrend
+      } else {
+        adxStatus = 'BEARISH'; // Strong downtrend
+      }
+    }
+    indicatorData.push({
+      name: 'ADX',
+      status: adxStatus,
+      type: 'adx'
+    });
+
     // Return in fixed order (no sorting) to match compact section order
     return indicatorData;
   };
@@ -100,13 +119,13 @@ export default function TechnicalIndicators({ indicators, currentPrice, compact 
       case 'rsi':
         return (
           <div className="flex items-center justify-between">
-            <span className={`text-lg font-bold ${
+            <span className={`text-base font-bold ${
               indicators.rsi > 70 ? 'text-red-400' :
               indicators.rsi < 30 ? 'text-green-400' : 'text-yellow-400'
             }`}>
               {formatIndicatorValue(safeNumber(indicators.rsi), 1)}
             </span>
-            <div className="w-24 h-2 bg-gray-700 rounded-full overflow-hidden">
+            <div className="w-20 h-1.5 bg-gray-700 rounded-full overflow-hidden">
               <div
                 className={`h-full transition-all duration-500 ${
                   indicators.rsi > 70 ? 'bg-red-500' :
@@ -120,7 +139,7 @@ export default function TechnicalIndicators({ indicators, currentPrice, compact 
 
       case 'macd':
         return (
-          <div className="space-y-1 text-sm">
+          <div className="space-y-1 text-xs">
             <div className="flex justify-between">
               <span className="text-gray-400">MACD:</span>
               <span className="text-gray-100">{formatIndicatorValue(safeNumber(indicators.macd.MACD), 6)}</span>
@@ -140,7 +159,7 @@ export default function TechnicalIndicators({ indicators, currentPrice, compact 
 
       case 'bollinger':
         return (
-          <div className="space-y-1 text-sm">
+          <div className="space-y-1 text-xs">
             <div className="flex justify-between">
               <span className="text-gray-400">Upper:</span>
               <span className="text-gray-100">{formatPrice(indicators.bollingerBands.upper)}</span>
@@ -158,7 +177,7 @@ export default function TechnicalIndicators({ indicators, currentPrice, compact 
 
       case 'ema':
         return (
-          <div className="space-y-1 text-sm">
+          <div className="space-y-1 text-xs">
             <div className="flex justify-between">
               <span className="text-gray-400">EMA 20:</span>
               <span className="text-gray-100">{formatPrice(indicators.ema20)}</span>
@@ -170,7 +189,31 @@ export default function TechnicalIndicators({ indicators, currentPrice, compact 
           </div>
         );
 
-
+      case 'adx':
+        return (
+          <div className="space-y-1 text-xs">
+            <div className="flex justify-between">
+              <span className="text-gray-400">ADX:</span>
+              <span className={`font-bold ${
+                indicators.adx > 50 ? 'text-green-400' :
+                indicators.adx >= 25 ? 'text-yellow-400' : 'text-gray-400'
+              }`}>
+                {formatIndicatorValue(safeNumber(indicators.adx), 1)}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-400">Trend:</span>
+              <span className={`text-xs ${
+                indicators.adx < 20 ? 'text-gray-400' :
+                indicators.ema20 > indicators.ema50 ? 'text-green-400' : 'text-red-400'
+              }`}>
+                {indicators.adx < 20 ? 'Range-bound' :
+                 indicators.adx > 50 ? 'Very Strong' :
+                 indicators.adx >= 25 ? 'Strong' : 'Emerging'}
+              </span>
+            </div>
+          </div>
+        );
 
       default:
         return null;
@@ -178,7 +221,7 @@ export default function TechnicalIndicators({ indicators, currentPrice, compact 
   };
 
   // Validate indicators data
-  if (!indicators || typeof indicators.rsi !== 'number' || !indicators.macd || !indicators.bollingerBands) {
+  if (!indicators || typeof indicators.rsi !== 'number' || !indicators.macd || !indicators.bollingerBands || typeof indicators.adx !== 'number') {
     return (
       <div className="bg-gradient-to-br from-gray-800/90 to-black/90 backdrop-blur-md rounded-xl p-6 border border-gray-600/30 shadow-xl">
         <div className="flex items-center gap-2 mb-6">
@@ -256,16 +299,16 @@ export default function TechnicalIndicators({ indicators, currentPrice, compact 
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Render indicators in 2x2 grid layout */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        {/* Render indicators in responsive grid layout to fit all 5 indicators */}
         {indicatorData.map((indicator) => (
-          <div key={indicator.type} className="p-4 bg-gradient-to-r from-gray-700/20 to-gray-600/10 rounded-lg border border-gray-600/30">
-            <div className="flex items-center justify-between mb-3">
+          <div key={indicator.type} className="p-3 bg-gradient-to-r from-gray-700/20 to-gray-600/10 rounded-lg border border-gray-600/30">
+            <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                <span className="text-lg font-bold text-gray-100">{indicator.name}</span>
+                <div className="w-1.5 h-1.5 bg-blue-400 rounded-full"></div>
+                <span className="text-base font-bold text-gray-100">{indicator.name}</span>
               </div>
-              <span className={`text-sm font-bold px-2 py-1 rounded-full ${
+              <span className={`text-xs font-bold px-2 py-1 rounded-full ${
                 indicator.status === 'BULLISH' ? 'text-green-400 bg-green-900/20' :
                 indicator.status === 'BEARISH' ? 'text-red-400 bg-red-900/20' : 'text-yellow-400 bg-yellow-900/20'
               }`}>

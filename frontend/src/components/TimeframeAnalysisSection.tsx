@@ -217,6 +217,21 @@ export default function TimeframeAnalysisSection({
       return 'Neutral';
     }
 
+    if (key.toLowerCase().includes('adx')) {
+      if (typeof value === 'number') {
+        if (value < 20) {
+          return 'Neutral'; // Weak/no trend
+        } else {
+          // Direction based on EMA trend
+          if (technicalIndicators.ema20 && technicalIndicators.ema50) {
+            return technicalIndicators.ema20 > technicalIndicators.ema50 ? 'Buy' : 'Sell';
+          }
+          return 'Neutral';
+        }
+      }
+      return 'Neutral';
+    }
+
     // Generic object with signal property
     if (typeof value === 'object' && value?.signal) {
       return String(value.signal || 'Neutral');
@@ -282,6 +297,11 @@ export default function TimeframeAnalysisSection({
                 indicatorsToShow.push(['bollingerBands', technicalIndicators.bollingerBands]);
               }
 
+              // Add ADX if available
+              if (technicalIndicators.adx !== undefined) {
+                indicatorsToShow.push(['ADX', technicalIndicators.adx]);
+              }
+
               return indicatorsToShow;
             })()
               .map(([key, value]) => {
@@ -300,6 +320,9 @@ export default function TimeframeAnalysisSection({
                 }
                 if (key === 'macd') {
                   displayName = 'MACD';
+                }
+                if (key === 'ADX') {
+                  displayName = 'ADX';
                 }
 
                 // Get signal badge color

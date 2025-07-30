@@ -141,7 +141,8 @@ export const generateAdvancedSignals = async (req: Request, res: Response) => {
                     lower: indicators.bollingerBands.lower
                 },
                 ema20: indicators.ema20,
-                ema50: indicators.ema50
+                ema50: indicators.ema50,
+                adx: indicators.adx
             },
             chartPatterns,
             candlestickPatterns,

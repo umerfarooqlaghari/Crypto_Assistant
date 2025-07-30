@@ -3,11 +3,11 @@ CRYPTO ASSISTANT - CONFIDENCE & STRENGTH SIGNAL CALCULATION SYSTEM
 
 OVERVIEW
 --------
-The system uses a comprehensive scoring algorithm that combines 4 core technical
+The system uses a comprehensive scoring algorithm that combines 5 core technical
 indicators, chart patterns, and candlestick patterns to generate confidence and
 strength signals for trading decisions.
 
-CORE TECHNICAL INDICATORS (4 INDICATORS)
+CORE TECHNICAL INDICATORS (5 INDICATORS)
 ===============================================================================
 
 1. RSI (RELATIVE STRENGTH INDEX)
@@ -44,7 +44,16 @@ CORE TECHNICAL INDICATORS (4 INDICATORS)
      * EMA20 > EMA50: +15 BULLISH points (uptrend)
      * EMA20 < EMA50: +15 BEARISH points (downtrend)
 
-
+5. ADX (AVERAGE DIRECTIONAL INDEX)
+   - Period: 14 candles
+   - Range: 0-100 (measures trend strength, not direction)
+   - Calculation: Based on directional movement and true range
+   - Scoring (trend strength multiplier):
+     * ADX > 50: +20 points (very strong trend - direction based on EMA)
+     * ADX 25-50: +15 points (strong trend - direction based on EMA)
+     * ADX 20-25: +5 points (emerging trend - direction based on EMA)
+     * ADX < 20: 0 points (weak/no trend - range-bound market)
+   - Note: Points are added to BULLISH if EMA20 > EMA50, BEARISH if EMA20 < EMA50
 
 CHART PATTERNS (ADVANCED DETECTION)
 ===============================================================================
