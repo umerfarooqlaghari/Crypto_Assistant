@@ -1,5 +1,4 @@
 import ConfigurableSignalService from './configurableSignalService';
-import NotificationEngine from './notificationEngine';
 import prismaService from './prismaService';
 import { BinanceService } from './binanceService';
 import { serviceManager } from './serviceManager';
@@ -26,13 +25,11 @@ export interface MultiTimeframeProcessingResult {
 
 export class EnhancedSignalOrchestrator {
   private configurableSignalService: ConfigurableSignalService;
-  private notificationEngine: NotificationEngine;
   private binanceService: BinanceService;
   private io: SocketIOServer | null = null;
 
   constructor(io?: SocketIOServer) {
     this.configurableSignalService = new ConfigurableSignalService();
-    this.notificationEngine = new NotificationEngine(io);
     // Use shared BinanceService from ServiceManager to avoid duplicate WebSocket connections
     this.binanceService = serviceManager.getBinanceService();
     this.io = io || null;
@@ -40,7 +37,6 @@ export class EnhancedSignalOrchestrator {
 
   public setSocketIO(io: SocketIOServer): void {
     this.io = io;
-    this.notificationEngine.setSocketIO(io);
   }
 
   // Process a single symbol and timeframe with full pipeline
@@ -74,13 +70,8 @@ export class EnhancedSignalOrchestrator {
         startTime
       );
 
-      // Evaluate for notifications
-      const notifications = await this.notificationEngine.evaluateSignal(
-        enhancedSignal,
-        symbol,
-        timeframe,
-        exchange
-      );
+      // Notifications are handled by cron job (NotificationRuleChecker) only
+      const notifications: any[] = [];
 
       // Emit real-time signal update
       if (this.io) {
@@ -157,12 +148,8 @@ export class EnhancedSignalOrchestrator {
         startTime
       );
 
-      // Evaluate for notifications
-      const notifications = await this.notificationEngine.evaluateMultiTimeframeSignal(
-        multiSignal,
-        symbol,
-        exchange
-      );
+      // Notifications are handled by cron job (NotificationRuleChecker) only
+      const notifications: any[] = [];
 
       // Emit real-time multi-timeframe update
       if (this.io) {

@@ -1,7 +1,7 @@
 import { logInfo, logError } from '../utils/logger';
 import { prismaService } from './prismaService';
-import { NotificationEngine } from './notificationEngine';
 import { CoinListItem } from './coinListService';
+import { Server as SocketIOServer } from 'socket.io';
 
 export interface NotificationRule {
   id: string;
@@ -24,10 +24,10 @@ export class NotificationRuleChecker {
   private static instance: NotificationRuleChecker;
   private lastNotificationTimes: Map<string, Date> = new Map(); // key: ruleId-symbol
   private lastNotificationValues: Map<string, any> = new Map(); // key: ruleId-symbol, value: signal values that triggered notification
-  private notificationEngine: NotificationEngine;
+  private io: SocketIOServer | null = null;
 
   private constructor() {
-    this.notificationEngine = new NotificationEngine();
+    // No NotificationEngine needed - this class handles notifications directly
   }
 
   public static getInstance(): NotificationRuleChecker {
@@ -37,8 +37,8 @@ export class NotificationRuleChecker {
     return NotificationRuleChecker.instance;
   }
 
-  public setSocketIO(io: any): void {
-    this.notificationEngine.setSocketIO(io);
+  public setSocketIO(io: SocketIOServer): void {
+    this.io = io;
   }
 
   /**
@@ -156,7 +156,7 @@ export class NotificationRuleChecker {
     // Determine required count for matching signals
     let requiredCount: number;
     if (rule.specificTimeframes && rule.specificTimeframes.length > 0) {
-      // For specific timeframes, require all selected timeframes to match
+      // For specific timeframes, require ALL selected timeframes to match
       requiredCount = rule.specificTimeframes.length;
     } else {
       // Fallback to legacy requiredTimeframes field
@@ -330,7 +330,7 @@ export class NotificationRuleChecker {
       logInfo(`Generated notification for ${coin.symbol} using rule ${rule.name}`);
 
       // Send real-time notification via WebSocket if available
-      if (this.notificationEngine && (this.notificationEngine as any).io) {
+      if (this.io) {
         const payload = {
           id: notification.id,
           title,
@@ -349,7 +349,7 @@ export class NotificationRuleChecker {
         };
 
         try {
-          (this.notificationEngine as any).io.emit('notification', payload);
+          this.io.emit('notification', payload);
           logInfo(`Real-time notification sent for ${coin.symbol}`);
         } catch (error) {
           logError('Error sending real-time notification', error as Error);

@@ -124,7 +124,7 @@ export const generateAdvancedSignals = async (req: Request, res: Response) => {
             marketData: {
                 price: ticker24hr.price,
                 priceChange24h: ticker24hr.priceChangePercent,
-                volume: ticker24hr.volume,
+                volume: ticker24hr.volume, // Quote asset volume (USD value)
                 high24h: ticker24hr.high,
                 low24h: ticker24hr.low
             },

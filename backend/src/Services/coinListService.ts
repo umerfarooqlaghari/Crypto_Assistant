@@ -193,10 +193,10 @@ export class CoinListService {
               s: cachedTicker.symbol,
               c: cachedTicker.price,
               P: cachedTicker.priceChangePercent,
-              v: cachedTicker.volume,
+              v: cachedTicker.baseVolume, // Base asset volume (coin count)
+              q: cachedTicker.volume, // Quote asset volume (USD value) - now comes directly from WebSocket
               h: cachedTicker.high,
-              l: cachedTicker.low,
-              q: (parseFloat(cachedTicker.volume) * parseFloat(cachedTicker.price)).toString()
+              l: cachedTicker.low
             });
           } else {
             // If no cached data yet, create basic item and let individual stream populate it
@@ -621,7 +621,7 @@ export class CoinListService {
       const symbol = ticker.s;
       const price = parseFloat(ticker.c);
       const priceChange24h = parseFloat(ticker.P);
-      const volume = parseFloat(ticker.v);
+      const volume = parseFloat(ticker.q); // Quote asset volume (USD value)
 
       // Get coin name from symbol (remove USDT)
       const coinName = symbol.replace('USDT', '');

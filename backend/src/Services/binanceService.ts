@@ -31,7 +31,8 @@ export interface BinanceTicker {
   symbol: string;
   price: string;
   priceChangePercent: string;
-  volume: string;
+  volume: string; // Quote asset volume (USD value)
+  baseVolume: string; // Base asset volume (coin count)
   high: string;
   low: string;
 }
@@ -268,7 +269,8 @@ export class BinanceService {
       symbol: ticker.s,
       price: ticker.c,
       priceChangePercent: ticker.P,
-      volume: ticker.v,
+      volume: ticker.q, // Quote asset volume (USD value)
+      baseVolume: ticker.v, // Base asset volume (coin count)
       high: ticker.h,
       low: ticker.l
     };
@@ -612,7 +614,8 @@ export class BinanceService {
         symbol: response.data.symbol,
         price: response.data.lastPrice,
         priceChangePercent: response.data.priceChangePercent,
-        volume: response.data.volume,
+        volume: response.data.quoteVolume, // Quote asset volume (USD value)
+        baseVolume: response.data.volume, // Base asset volume (coin count)
         high: response.data.highPrice,
         low: response.data.lowPrice
       };
@@ -980,7 +983,8 @@ export class BinanceService {
             symbol: ticker.s,
             price: ticker.c,
             priceChangePercent: ticker.P,
-            volume: ticker.v,
+            volume: ticker.q, // Quote asset volume (USD value)
+            baseVolume: ticker.v, // Base asset volume (coin count)
             high: ticker.h,
             low: ticker.l
           };
@@ -1056,7 +1060,8 @@ export class BinanceService {
           symbol: ticker.s,
           price: ticker.c,
           priceChangePercent: ticker.P,
-          volume: ticker.v,
+          volume: ticker.q, // Quote asset volume (USD value)
+          baseVolume: ticker.v, // Base asset volume (coin count)
           high: ticker.h,
           low: ticker.l
         };
