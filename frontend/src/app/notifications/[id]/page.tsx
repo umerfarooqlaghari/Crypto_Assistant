@@ -127,6 +127,46 @@ export default function NotificationDetailPage() {
     }
   };
 
+  // Get signal-based colors for bars and backgrounds
+  const getSignalBarColor = (signal: string) => {
+    switch (signal) {
+      case 'BUY':
+        return 'bg-green-500';
+      case 'SELL':
+        return 'bg-red-500';
+      case 'HOLD':
+        return 'bg-yellow-500';
+      default:
+        return 'bg-gray-500';
+    }
+  };
+
+  const getSignalTextColor = (signal: string) => {
+    switch (signal) {
+      case 'BUY':
+        return 'text-green-400';
+      case 'SELL':
+        return 'text-red-400';
+      case 'HOLD':
+        return 'text-yellow-400';
+      default:
+        return 'text-gray-400';
+    }
+  };
+
+  const getSignalBgColor = (signal: string) => {
+    switch (signal) {
+      case 'BUY':
+        return 'bg-green-900/40 border-green-600/50';
+      case 'SELL':
+        return 'bg-red-900/40 border-red-600/50';
+      case 'HOLD':
+        return 'bg-yellow-900/40 border-yellow-600/50';
+      default:
+        return 'bg-gray-900/40 border-gray-600/50';
+    }
+  };
+
 
 
   if (loading) {
@@ -221,47 +261,49 @@ export default function NotificationDetailPage() {
             </div>
           </div>
 
-          {/* Bottom Section - Signal Details */}
-          <div className="bg-gray-900 p-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Signal Strength */}
-              <div>
-                <h4 className="text-sm font-medium text-gray-400 mb-2">Signal Strength</h4>
-                <div className="text-2xl font-bold text-blue-400 mb-2">{(notification.strength || 49).toFixed(1)}%</div>
-                <div className="w-full bg-gray-700 rounded-full h-2">
-                  <div
-                    className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${Math.min(notification.strength || 49, 100)}%` }}
-                  ></div>
+          {/* Bottom Section - Signal Details (Only show for single timeframe) */}
+          {notification.timeframe !== 'multi' && (
+            <div className={`p-6 ${getSignalBgColor(notification.signal)}`}>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Signal Strength */}
+                <div>
+                  <h4 className="text-sm font-medium text-gray-400 mb-2">Signal Strength</h4>
+                  <div className={`text-2xl font-bold mb-2 ${getSignalTextColor(notification.signal)}`}>{(notification.strength || 49).toFixed(1)}%</div>
+                  <div className="w-full bg-gray-700 rounded-full h-2">
+                    <div
+                      className={`h-2 rounded-full transition-all duration-300 ${getSignalBarColor(notification.signal)}`}
+                      style={{ width: `${Math.min(notification.strength || 49, 100)}%` }}
+                    ></div>
+                  </div>
                 </div>
-              </div>
 
-              {/* Confidence Level */}
-              <div>
-                <h4 className="text-sm font-medium text-gray-400 mb-2">Confidence Level</h4>
-                <div className="text-2xl font-bold text-green-400 mb-2">{(notification.confidence || 98).toFixed(1)}%</div>
-                <div className="w-full bg-gray-700 rounded-full h-2">
-                  <div
-                    className="bg-green-500 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${Math.min(notification.confidence || 98, 100)}%` }}
-                  ></div>
+                {/* Confidence Level */}
+                <div>
+                  <h4 className="text-sm font-medium text-gray-400 mb-2">Confidence Level</h4>
+                  <div className={`text-2xl font-bold mb-2 ${getSignalTextColor(notification.signal)}`}>{(notification.confidence || 98).toFixed(1)}%</div>
+                  <div className="w-full bg-gray-700 rounded-full h-2">
+                    <div
+                      className={`h-2 rounded-full transition-all duration-300 ${getSignalBarColor(notification.signal)}`}
+                      style={{ width: `${Math.min(notification.confidence || 98, 100)}%` }}
+                    ></div>
+                  </div>
                 </div>
-              </div>
 
-              {/* Symbol */}
-              <div>
-                <h4 className="text-sm font-medium text-gray-400 mb-2">Symbol</h4>
-                <div className="text-2xl font-bold text-white mb-2">{notification.symbol}</div>
-                <div className="text-xs text-gray-500 mb-3">Timeframe: {notification.timeframe === 'multi' ? 'Multi' : notification.timeframe || '5m'}</div>
-                <Link
-                  href={`/analysis/${notification.symbol.toLowerCase()}`}
-                  className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
-                >
-                  📊 Go to coin analysis
-                </Link>
+                {/* Symbol */}
+                <div>
+                  <h4 className="text-sm font-medium text-gray-400 mb-2">Symbol</h4>
+                  <div className="text-2xl font-bold text-white mb-2">{notification.symbol}</div>
+                  <div className="text-xs text-gray-500 mb-3">Timeframe: {notification.timeframe === 'multi' ? 'Multi' : notification.timeframe || '5m'}</div>
+                  <Link
+                    href={`/analysis/${notification.symbol.toLowerCase()}`}
+                    className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
+                  >
+                    📊 Go to coin analysis
+                  </Link>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Main Content - Render timeframes */}

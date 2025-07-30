@@ -80,6 +80,56 @@ export default function TimeframeAnalysisSection({
 
   const { confidence, strength } = getConfidenceAndStrength();
 
+  // Get signal for this timeframe
+  const getTimeframeSignal = () => {
+    if (notification.timeframe === 'multi' && notification.technicalIndicators && notification.technicalIndicators[timeframe]) {
+      return notification.technicalIndicators[timeframe].action || notification.signal || 'HOLD';
+    }
+    return notification.signal || 'HOLD';
+  };
+
+  const timeframeSignal = getTimeframeSignal();
+
+  // Get signal-based colors for bars and backgrounds
+  const getSignalBarColor = (signal: string) => {
+    switch (signal) {
+      case 'BUY':
+        return 'bg-green-500';
+      case 'SELL':
+        return 'bg-red-500';
+      case 'HOLD':
+        return 'bg-yellow-500';
+      default:
+        return 'bg-gray-500';
+    }
+  };
+
+  const getSignalTextColor = (signal: string) => {
+    switch (signal) {
+      case 'BUY':
+        return 'text-green-400';
+      case 'SELL':
+        return 'text-red-400';
+      case 'HOLD':
+        return 'text-yellow-400';
+      default:
+        return 'text-gray-400';
+    }
+  };
+
+  const getSignalBgColor = (signal: string) => {
+    switch (signal) {
+      case 'BUY':
+        return 'bg-green-900/40 border-green-600/50';
+      case 'SELL':
+        return 'bg-red-900/40 border-red-600/50';
+      case 'HOLD':
+        return 'bg-yellow-900/40 border-yellow-600/50';
+      default:
+        return 'bg-gray-900/40 border-gray-600/50';
+    }
+  };
+
   // Get pattern signal color and badge
   const getPatternSignalBadge = (type: string) => {
     switch (type?.toUpperCase()) {
@@ -281,17 +331,17 @@ export default function TimeframeAnalysisSection({
         </div>
 
         {/* Top Right: Confidence & Strength */}
-        <div className="bg-gray-900 rounded-lg p-4">
+        <div className={`rounded-lg p-4 ${getSignalBgColor(timeframeSignal)}`}>
           <h4 className="text-lg font-semibold mb-4">Confidence & Strength</h4>
           <div className="space-y-4">
             <div>
               <div className="flex justify-between text-sm mb-2">
                 <span className="text-gray-400">Confidence</span>
-                <span className="text-green-400 font-medium">{confidence.toFixed(0)}%</span>
+                <span className={`font-medium ${getSignalTextColor(timeframeSignal)}`}>{confidence.toFixed(0)}%</span>
               </div>
               <div className="w-full bg-gray-700 rounded-full h-3">
                 <div
-                  className="bg-green-500 h-3 rounded-full transition-all duration-300"
+                  className={`h-3 rounded-full transition-all duration-300 ${getSignalBarColor(timeframeSignal)}`}
                   style={{ width: `${Math.min(confidence, 100)}%` }}
                 ></div>
               </div>
@@ -299,11 +349,11 @@ export default function TimeframeAnalysisSection({
             <div>
               <div className="flex justify-between text-sm mb-2">
                 <span className="text-gray-400">Strength</span>
-                <span className="text-blue-400 font-medium">{strength.toFixed(0)}%</span>
+                <span className={`font-medium ${getSignalTextColor(timeframeSignal)}`}>{strength.toFixed(0)}%</span>
               </div>
               <div className="w-full bg-gray-700 rounded-full h-3">
                 <div
-                  className="bg-blue-500 h-3 rounded-full transition-all duration-300"
+                  className={`h-3 rounded-full transition-all duration-300 ${getSignalBarColor(timeframeSignal)}`}
                   style={{ width: `${Math.min(strength, 100)}%` }}
                 ></div>
               </div>
