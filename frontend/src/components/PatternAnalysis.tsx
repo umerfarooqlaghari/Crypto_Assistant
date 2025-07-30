@@ -47,14 +47,16 @@ export default function PatternAnalysis({ chartPatterns, candlestickPatterns }: 
 
   const PatternCard = ({ pattern, type }: { pattern: Pattern; type: string }) => (
     <div className={`p-3 rounded-lg border ${getPatternBgColor(pattern.type)}`}>
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 flex-1">
           <div className={getPatternColor(pattern.type)}>
             {getPatternIcon(pattern.type)}
           </div>
           <span className="font-medium text-gray-100 text-sm">{pattern.name}</span>
+          <span className="text-sm text-gray-400">-</span>
+          <span className="text-sm text-gray-400 line-clamp-1">{pattern.description}</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 ml-4">
           <span className={`text-sm px-2 py-1 rounded ${getPatternBgColor(pattern.type)} ${getPatternColor(pattern.type)}`}>
             {pattern.type}
           </span>
@@ -72,15 +74,14 @@ export default function PatternAnalysis({ chartPatterns, candlestickPatterns }: 
           </div>
         </div>
       </div>
-      <p className="text-sm text-gray-400 line-clamp-1">{pattern.description}</p>
     </div>
   );
 
   return (
     <div className="bg-gradient-to-br from-gray-800/90 to-black/90 backdrop-blur-md rounded-xl p-4 border border-gray-600/30 shadow-xl h-fit">
 
-      {/* Scrollable content with max height */}
-      <div className="max-h-80 overflow-y-auto space-y-3 pr-1">
+      {/* Scrollable content with max height and custom scrollbar */}
+      <div className="max-h-80 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
         {/* Chart Patterns */}
         <div>
           <h4 className="text-base font-medium text-gray-100 mb-3 flex items-center gap-2">
@@ -89,14 +90,9 @@ export default function PatternAnalysis({ chartPatterns, candlestickPatterns }: 
           </h4>
           {chartPatterns.length > 0 ? (
             <div className="space-y-2">
-              {chartPatterns.slice(0, 2).map((pattern, index) => (
+              {chartPatterns.map((pattern, index) => (
                 <PatternCard key={index} pattern={pattern} type="Chart Pattern" />
               ))}
-              {chartPatterns.length > 2 && (
-                <div className="text-center p-2 bg-gray-700/20 rounded">
-                  <p className="text-gray-400 text-sm">+{chartPatterns.length - 2} more patterns</p>
-                </div>
-              )}
             </div>
           ) : (
             <div className="p-3 bg-gradient-to-r from-gray-700/20 to-gray-600/10 rounded border border-gray-600/30 text-center">
@@ -113,14 +109,9 @@ export default function PatternAnalysis({ chartPatterns, candlestickPatterns }: 
           </h4>
           {candlestickPatterns.length > 0 ? (
             <div className="space-y-2">
-              {candlestickPatterns.slice(0, 2).map((pattern, index) => (
+              {candlestickPatterns.map((pattern, index) => (
                 <PatternCard key={index} pattern={pattern} type="Candlestick Pattern" />
               ))}
-              {candlestickPatterns.length > 2 && (
-                <div className="text-center p-2 bg-gray-700/20 rounded">
-                  <p className="text-gray-400 text-sm">+{candlestickPatterns.length - 2} more patterns</p>
-                </div>
-              )}
             </div>
           ) : (
             <div className="p-2 bg-gradient-to-r from-gray-700/20 to-gray-600/10 rounded border border-gray-600/30 text-center">

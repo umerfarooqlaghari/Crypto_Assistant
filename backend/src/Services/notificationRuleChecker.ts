@@ -170,87 +170,41 @@ export class NotificationRuleChecker {
    * Generate a notification when a rule is triggered
    */
   private async generateNotification(
-    rule: NotificationRule, 
-    coin: CoinListItem, 
+    rule: NotificationRule,
+    coin: CoinListItem,
     matchingSignals: Array<{timeframe: string, signal: any}>
   ): Promise<void> {
     try {
       const prisma = prismaService.getClient();
 
-      // Calculate average confidence and strength across matching signals
-      const avgConfidence = matchingSignals.reduce((sum, ms) => sum + ms.signal.confidence, 0) / matchingSignals.length;
-      const avgStrength = matchingSignals.reduce((sum, ms) => sum + ms.signal.strength, 0) / matchingSignals.length;
-      
       // Get the primary signal (from the first matching timeframe)
       const primarySignal = matchingSignals[0].signal;
       const primaryTimeframe = matchingSignals[0].timeframe;
 
-      // Create notification title and message with timeframe details
-      const timeframeList = matchingSignals.map(ms => ms.timeframe).join(', ');
-      const title = `${rule.name}: ${coin.symbol} ${primarySignal.action} Signal`;
-      const message = `${coin.symbol} meets ${rule.name} criteria with ${avgConfidence.toFixed(1)}% confidence and ${avgStrength.toFixed(1)}% strength across timeframes: ${timeframeList}`;
+      // Determine if this is a multi-timeframe notification
+      const triggeredTimeframes = matchingSignals.map(ms => ms.timeframe);
+      const isMultiTimeframe = triggeredTimeframes.length > 1;
 
-      // Get fresh technical analysis data for this coin and timeframe
+      // For single timeframe notifications, use the actual signal values from that timeframe
+      // For multi-timeframe notifications, store per-timeframe data and use primary for top-level values
       let technicalIndicators = null;
       let chartPatterns = null;
       let candlestickPatterns = null;
       let analysisReasoning = null;
       let currentPrice = coin.price;
-
-      try {
-        // Import the enhanced signal service to get current technical analysis
-        const EnhancedSignalOrchestrator = (await import('./enhancedSignalOrchestrator')).default;
-        const signalOrchestrator = new EnhancedSignalOrchestrator();
-
-        // Get current technical analysis for the primary timeframe
-        const currentAnalysis = await signalOrchestrator.processSignal(
-          coin.symbol,
-          primaryTimeframe,
-          'binance'
-        );
-
-        if (currentAnalysis && currentAnalysis.signal) {
-          const signal = currentAnalysis.signal;
-          technicalIndicators = signal.technicalIndicators || null;
-          chartPatterns = signal.chartPatterns || null;
-          candlestickPatterns = signal.candlestickPatterns || null;
-          analysisReasoning = signal.reasoning || null;
-          currentPrice = signal.currentPrice || coin.price;
-        }
-      } catch (error) {
-        logError(`Failed to get current technical analysis for ${coin.symbol}`, error as Error);
-
-        // Fallback: try to get from recent signal in database
-        const recentSignal = await prisma.signalHistory.findFirst({
-          where: {
-            symbol: coin.symbol,
-            timeframe: primaryTimeframe
-          },
-          orderBy: {
-            generatedAt: 'desc'
-          }
-        });
-
-        if (recentSignal) {
-          technicalIndicators = recentSignal.technicalIndicators;
-          chartPatterns = recentSignal.chartPatterns;
-          candlestickPatterns = recentSignal.candlestickPatterns;
-          analysisReasoning = recentSignal.reasoning;
-          currentPrice = recentSignal.currentPrice || coin.price;
-        }
-      }
-
-      // Determine if this is a multi-timeframe notification
-      const triggeredTimeframes = matchingSignals.map(ms => ms.timeframe);
-      const isMultiTimeframe = triggeredTimeframes.length > 1;
+      let notificationConfidence = primarySignal.confidence;
+      let notificationStrength = primarySignal.strength;
 
       // For multi-timeframe notifications, collect technical analysis from all timeframes
       let multiTimeframeAnalysis: Record<string, any> | null = null;
       if (isMultiTimeframe) {
         multiTimeframeAnalysis = {};
 
-        // Get technical analysis for each triggered timeframe
-        for (const timeframe of triggeredTimeframes) {
+        // Get technical analysis for each triggered timeframe and store their actual values
+        for (const matchingSignal of matchingSignals) {
+          const timeframe = matchingSignal.timeframe;
+          const signal = matchingSignal.signal;
+
           try {
             const EnhancedSignalOrchestrator = (await import('./enhancedSignalOrchestrator')).default;
             const signalOrchestrator = new EnhancedSignalOrchestrator();
@@ -262,19 +216,90 @@ export class NotificationRuleChecker {
             );
 
             if (analysis && analysis.signal) {
+              // Store the actual fresh analysis data for this timeframe
               multiTimeframeAnalysis[timeframe] = {
                 technicalIndicators: analysis.signal.technicalIndicators || null,
                 chartPatterns: analysis.signal.chartPatterns || null,
                 candlestickPatterns: analysis.signal.candlestickPatterns || null,
                 reasoning: analysis.signal.reasoning || null,
-                currentPrice: analysis.signal.currentPrice || coin.price
+                currentPrice: analysis.signal.currentPrice || coin.price,
+                // Store the actual confidence and strength that triggered this timeframe
+                confidence: analysis.signal.confidence > 1 ? analysis.signal.confidence : analysis.signal.confidence * 100,
+                strength: analysis.signal.strength,
+                action: analysis.signal.signal
+              };
+            } else {
+              // Fallback to the signal values from coin list if fresh analysis fails
+              multiTimeframeAnalysis[timeframe] = {
+                technicalIndicators: null,
+                chartPatterns: null,
+                candlestickPatterns: null,
+                reasoning: null,
+                currentPrice: coin.price,
+                confidence: signal.confidence,
+                strength: signal.strength,
+                action: signal.action
               };
             }
           } catch (error) {
             logError(`Failed to get technical analysis for ${coin.symbol} ${timeframe}`, error as Error);
+            // Fallback to the signal values from coin list
+            multiTimeframeAnalysis[timeframe] = {
+              technicalIndicators: null,
+              chartPatterns: null,
+              candlestickPatterns: null,
+              reasoning: null,
+              currentPrice: coin.price,
+              confidence: signal.confidence,
+              strength: signal.strength,
+              action: signal.action
+            };
           }
         }
+
+        // For multi-timeframe, use primary timeframe data for top-level notification values
+        if (multiTimeframeAnalysis[primaryTimeframe]) {
+          const primaryData = multiTimeframeAnalysis[primaryTimeframe];
+          technicalIndicators = primaryData.technicalIndicators;
+          chartPatterns = primaryData.chartPatterns;
+          candlestickPatterns = primaryData.candlestickPatterns;
+          analysisReasoning = primaryData.reasoning;
+          currentPrice = primaryData.currentPrice;
+          notificationConfidence = primaryData.confidence;
+          notificationStrength = primaryData.strength;
+        }
+      } else {
+        // Single timeframe notification - get fresh analysis for the one timeframe
+        try {
+          const EnhancedSignalOrchestrator = (await import('./enhancedSignalOrchestrator')).default;
+          const signalOrchestrator = new EnhancedSignalOrchestrator();
+
+          const currentAnalysis = await signalOrchestrator.processSignal(
+            coin.symbol,
+            primaryTimeframe,
+            'binance'
+          );
+
+          if (currentAnalysis && currentAnalysis.signal) {
+            const signal = currentAnalysis.signal;
+            technicalIndicators = signal.technicalIndicators || null;
+            chartPatterns = signal.chartPatterns || null;
+            candlestickPatterns = signal.candlestickPatterns || null;
+            analysisReasoning = signal.reasoning || null;
+            currentPrice = signal.currentPrice || coin.price;
+            notificationConfidence = signal.confidence > 1 ? signal.confidence : signal.confidence * 100;
+            notificationStrength = signal.strength;
+          }
+        } catch (error) {
+          logError(`Failed to get current technical analysis for ${coin.symbol}`, error as Error);
+          // Keep the original values from coin list as fallback
+        }
       }
+
+      // Create notification title and message with timeframe details
+      const timeframeList = matchingSignals.map(ms => ms.timeframe).join(', ');
+      const title = `${rule.name}: ${coin.symbol} ${primarySignal.action} Signal`;
+      const message = `${coin.symbol} meets ${rule.name} criteria with ${notificationConfidence.toFixed(1)}% confidence and ${notificationStrength.toFixed(1)}% strength across timeframes: ${timeframeList}`;
 
       // Create notification in database with technical analysis data
       const notification = await prisma.notification.create({
@@ -285,8 +310,8 @@ export class NotificationRuleChecker {
           priority: rule.priority,
           symbol: coin.symbol,
           signal: primarySignal.action,
-          confidence: avgConfidence,
-          strength: avgStrength,
+          confidence: notificationConfidence,
+          strength: notificationStrength,
           timeframe: isMultiTimeframe ? 'multi' : primaryTimeframe,
           hasVisual: rule.enableVisual,
           ruleId: rule.id,
@@ -315,8 +340,8 @@ export class NotificationRuleChecker {
           hasVisual: rule.enableVisual,
           symbol: coin.symbol,
           signal: primarySignal.action,
-          confidence: avgConfidence,
-          strength: avgStrength,
+          confidence: notificationConfidence,
+          strength: notificationStrength,
           timeframe: primaryTimeframe,
           ruleId: rule.id,
           ruleName: rule.name,

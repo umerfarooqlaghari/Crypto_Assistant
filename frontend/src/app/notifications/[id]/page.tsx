@@ -203,7 +203,7 @@ export default function NotificationDetailPage() {
                         {part}
                         {index < array.length - 1 && (
                           <Link
-                            href={`/?symbol=${notification.symbol}`}
+                            href={`/analysis/${notification.symbol.toLowerCase()}`}
                             className="text-blue-600 hover:text-blue-800 underline font-semibold"
                           >
                             {notification.symbol}
@@ -254,7 +254,7 @@ export default function NotificationDetailPage() {
                 <div className="text-2xl font-bold text-white mb-2">{notification.symbol}</div>
                 <div className="text-xs text-gray-500 mb-3">Timeframe: {notification.timeframe === 'multi' ? 'Multi' : notification.timeframe || '5m'}</div>
                 <Link
-                  href={`/?symbol=${notification.symbol}`}
+                  href={`/analysis/${notification.symbol.toLowerCase()}`}
                   className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
                 >
                   📊 Go to coin analysis

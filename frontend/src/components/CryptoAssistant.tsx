@@ -247,47 +247,45 @@ export default function CryptoAssistant({ initialSymbol = 'BTCUSDT' }: CryptoAss
       {(realTimeData || signalData) && signalData && signalData.signal && signalData.technicalIndicators && (
         <div className="space-y-4 mb-6">
           {/* Top Row: Coin Details + Confidence & Signal Strength + Pattern Analysis */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Coin Details */}
-            <div className="bg-gradient-to-br from-gray-800/90 to-black/90 backdrop-blur-md rounded-xl p-4 border border-gray-600/30 shadow-xl">
-              <div className="flex flex-col items-center justify-center h-full text-center">
-                <h2 className="text-xl font-semibold text-gray-100 mb-3">{selectedSymbol}</h2>
-                <div className="flex items-center justify-center gap-3 mb-3">
-                  <span className="text-2xl font-bold text-gray-100">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Coin Details - Redesigned */}
+            <div className="bg-gray-900/95 backdrop-blur-md rounded-xl p-6 border border-gray-700/50 shadow-xl">
+              <div className="flex items-center justify-center gap-20">
+                <div className="text-center">
+                  <h2 className="text-xl font-bold text-white mb-1">{selectedSymbol}</h2>
+                  <div className="text-2xl font-bold text-white mb-1">
                     {formatPrice(realTimeData?.price || signalData?.currentPrice || 0)}
-                  </span>
-                  <span className={`text-lg font-medium ${
+                  </div>
+                  <div className={`text-sm font-medium ${
                     (realTimeData?.priceChange24h || parseFloat(signalData?.marketData?.priceChange24h || '0')) >= 0 ? 'text-green-400' : 'text-red-400'
                   }`}>
                     {formatPercentage(realTimeData?.priceChange24h || parseFloat(signalData?.marketData?.priceChange24h || '0'))}
-                  </span>
+                  </div>
                 </div>
-                <div>
+                <div className="text-center">
                   <div className="text-sm text-gray-400 mb-1">24h Volume</div>
-                  <div className="text-lg font-semibold text-gray-100">
+                  <div className="text-lg font-bold text-white">
                     {new Intl.NumberFormat('en-US', {
                       notation: 'compact',
-                      maximumFractionDigits: 2
+                      maximumFractionDigits: 1
                     }).format(realTimeData?.volume || parseFloat(signalData?.marketData?.volume || '0'))}
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Confidence & Signal Strength with Buy/Sell/Hold */}
-            <div className={`bg-gradient-to-br backdrop-blur-md rounded-xl p-4 border shadow-xl ${
-              signalData.signal.action === 'BUY' ? 'from-green-900/30 to-green-800/20 border-green-500/40' :
-              signalData.signal.action === 'SELL' ? 'from-red-900/30 to-red-800/20 border-red-500/40' :
-              'from-yellow-900/30 to-yellow-800/20 border-yellow-500/40'
+            {/* Trading Signal - Redesigned */}
+            <div className={`backdrop-blur-md rounded-xl p-6 border shadow-xl ${
+              signalData.signal.action === 'BUY' ? 'bg-green-900/40 border-green-600/50' :
+              signalData.signal.action === 'SELL' ? 'bg-red-900/40 border-red-600/50' :
+              'bg-yellow-900/40 border-yellow-600/50'
             }`}>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <div className={`${
-                    signalData.signal.action === 'BUY' ? 'text-green-400' :
-                    signalData.signal.action === 'SELL' ? 'text-red-400' : 'text-yellow-400'
-                  }`}>
-                    {signalData.signal.action === 'BUY' ? '📈' : signalData.signal.action === 'SELL' ? '📉' : '⚡'}
-                  </div>
+                  <div className={`w-3 h-3 rounded-full ${
+                    signalData.signal.action === 'BUY' ? 'bg-green-400' :
+                    signalData.signal.action === 'SELL' ? 'bg-red-400' : 'bg-yellow-400'
+                  }`}></div>
                   <span className={`text-xl font-bold ${
                     signalData.signal.action === 'BUY' ? 'text-green-400' :
                     signalData.signal.action === 'SELL' ? 'text-red-400' : 'text-yellow-400'
@@ -296,22 +294,24 @@ export default function CryptoAssistant({ initialSymbol = 'BTCUSDT' }: CryptoAss
                   </span>
                 </div>
                 <div className="text-right">
-                  <div className="text-sm text-gray-400">Timeframe</div>
-                  <div className="text-lg font-bold text-white">{signalData.timeframe}</div>
+                  <div className="text-lg font-bold text-white">
+                    <span className="text-sm text-gray-400 mr-1">Timeframe</span>
+                    {signalData.timeframe}
+                  </div>
                 </div>
               </div>
 
               {/* Confidence Progress Bar */}
               <div className="mb-3">
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-sm text-gray-400">Confidence</span>
-                  <span className="text-sm font-semibold text-white">{signalData.signal.confidence}%</span>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm text-gray-300">Confidence</span>
+                  <span className="text-sm font-bold text-white">{signalData.signal.confidence}%</span>
                 </div>
                 <div className="w-full bg-gray-700/50 rounded-full h-2">
                   <div
                     className={`h-2 rounded-full transition-all duration-500 ${
-                      signalData.signal.confidence >= 80 ? 'bg-green-500' :
-                      signalData.signal.confidence >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                      signalData.signal.action === 'BUY' ? 'bg-green-500' :
+                      signalData.signal.action === 'SELL' ? 'bg-red-500' : 'bg-yellow-500'
                     }`}
                     style={{ width: `${Math.min(signalData.signal.confidence, 100)}%` }}
                   />
@@ -320,67 +320,18 @@ export default function CryptoAssistant({ initialSymbol = 'BTCUSDT' }: CryptoAss
 
               {/* Strength Progress Bar */}
               <div className="mb-2">
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-sm text-gray-400">Strength</span>
-                  <span className="text-sm font-semibold text-white">{signalData.signal.strength}%</span>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm text-gray-300">Strength</span>
+                  <span className="text-sm font-bold text-white">{signalData.signal.strength}%</span>
                 </div>
                 <div className="w-full bg-gray-700/50 rounded-full h-2">
                   <div
                     className={`h-2 rounded-full transition-all duration-500 ${
-                      signalData.signal.strength >= 80 ? 'bg-blue-500' :
-                      signalData.signal.strength >= 60 ? 'bg-purple-500' : 'bg-gray-500'
+                      signalData.signal.action === 'BUY' ? 'bg-green-500' :
+                      signalData.signal.action === 'SELL' ? 'bg-red-500' : 'bg-yellow-500'
                     }`}
                     style={{ width: `${Math.min(signalData.signal.strength, 100)}%` }}
                   />
-                </div>
-              </div>
-            </div>
-
-            {/* Pattern Analysis */}
-            <div className="bg-gradient-to-br from-gray-800/90 to-black/90 backdrop-blur-md rounded-xl p-4 border border-gray-600/30 shadow-xl">
-              <div className="flex flex-col items-center justify-center h-full text-center space-y-3">
-                {/* Pattern Summary */}
-                <div className="grid grid-cols-3 gap-2 text-center text-sm">
-                  <div>
-                    <div className="text-green-400 font-semibold text-lg">
-                      {[...(signalData.chartPatterns || []), ...(signalData.candlestickPatterns || [])].filter(p => p.type === 'BULLISH').length}
-                    </div>
-                    <div className="text-xs text-gray-400">Bullish</div>
-                  </div>
-                  <div>
-                    <div className="text-red-400 font-semibold text-lg">
-                      {[...(signalData.chartPatterns || []), ...(signalData.candlestickPatterns || [])].filter(p => p.type === 'BEARISH').length}
-                    </div>
-                    <div className="text-xs text-gray-400">Bearish</div>
-                  </div>
-                  <div>
-                    <div className="text-yellow-400 font-semibold text-lg">
-                      {[...(signalData.chartPatterns || []), ...(signalData.candlestickPatterns || [])].filter(p => p.type === 'NEUTRAL').length}
-                    </div>
-                    <div className="text-xs text-gray-400">Neutral</div>
-                  </div>
-                </div>
-
-                {/* Top Patterns */}
-                <div className="space-y-2">
-                  {[...(signalData.chartPatterns || []), ...(signalData.candlestickPatterns || [])]
-                    .sort((a, b) => b.confidence - a.confidence)
-                    .slice(0, 3)
-                    .map((pattern, index) => (
-                      <div key={index} className="text-center">
-                        <div className="text-sm text-gray-300 mb-1">{pattern.name}</div>
-                        <div className="flex items-center justify-center gap-2">
-                          <span className={`text-xs px-2 py-1 rounded ${
-                            pattern.type === 'BULLISH' ? 'bg-green-900/30 text-green-400' :
-                            pattern.type === 'BEARISH' ? 'bg-red-900/30 text-red-400' :
-                            'bg-yellow-900/30 text-yellow-400'
-                          }`}>
-                            {pattern.type}
-                          </span>
-                          <span className="text-white font-semibold">{pattern.confidence}%</span>
-                        </div>
-                      </div>
-                    ))}
                 </div>
               </div>
             </div>

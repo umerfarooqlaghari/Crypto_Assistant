@@ -1,5 +1,5 @@
-import { TechnicalIndicatorService, TechnicalIndicators } from './technicalIndicatorService';
-import { AdvancedTechnicalAnalysis } from './advancedTechnicalAnalysis';
+
+import { AdvancedTechnicalAnalysis, TechnicalIndicatorResults } from './advancedTechnicalAnalysis';
 import { getOHLCVFromExchange } from './ccxtService';
 import { logSignalGeneration, logDebug, logError } from '../utils/logger';
 
@@ -8,7 +8,7 @@ export interface SignalResult {
   confidence: number;
   strength: number;
   reasoning: string[];
-  technicalIndicators?: TechnicalIndicators;
+  technicalIndicators?: TechnicalIndicatorResults;
   priceAction?: PriceActionAnalysis;
   riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
   timestamp: string;
@@ -39,11 +39,9 @@ export interface MultiTimeframeSignal {
 }
 
 export class SignalAnalysisService {
-  private technicalService: TechnicalIndicatorService;
   private advancedTechnicalAnalysis: AdvancedTechnicalAnalysis;
 
   constructor() {
-    this.technicalService = new TechnicalIndicatorService();
     this.advancedTechnicalAnalysis = new AdvancedTechnicalAnalysis();
   }
 
@@ -116,19 +114,12 @@ export class SignalAnalysisService {
       // Get OHLCV data for pattern analysis
       const ohlcv = await getOHLCVFromExchange(exchange, symbol, timeframe, 100);
 
-      // Get technical indicators (convert to advanced format)
-      const indicators = await this.technicalService.calculateIndicators(exchange, symbol, timeframe);
-      const advancedIndicators = {
-        rsi: indicators.rsi,
-        macd: {
-          MACD: indicators.macd.macd,
-          signal: indicators.macd.signal,
-          histogram: indicators.macd.histogram
-        },
-        bollingerBands: indicators.bollingerBands,
-        ema20: indicators.movingAverages.ema12, // Use available EMA
-        ema50: indicators.movingAverages.ema26  // Use available EMA
-      };
+      // Use the EXACT same calculation method as analysis page
+      const advancedIndicators = await this.advancedTechnicalAnalysis.calculateIndicators(
+        exchange,
+        symbol,
+        timeframe
+      );
 
       // Detect chart patterns
       const chartPatterns = this.advancedTechnicalAnalysis.detectChartPatterns(ohlcv, advancedIndicators);
@@ -151,14 +142,14 @@ export class SignalAnalysisService {
       const priceAction = await this.analyzePriceAction(exchange, symbol, timeframe);
 
       // Determine risk level
-      const riskLevel = this.calculateRiskLevel(indicators, priceAction);
+      const riskLevel = this.calculateRiskLevel(advancedIndicators, priceAction);
 
       const result: SignalResult = {
         signal: tradingSignal.action,
         confidence: tradingSignal.confidence / 100, // Convert to decimal
         strength: tradingSignal.strength,
         reasoning: tradingSignal.reasoning,
-        technicalIndicators: indicators,
+        technicalIndicators: advancedIndicators,
         priceAction,
         riskLevel,
         timestamp: new Date().toISOString(),
@@ -225,7 +216,7 @@ export class SignalAnalysisService {
 
   // Calculate risk level
   private calculateRiskLevel(
-    indicators: TechnicalIndicators,
+    indicators: TechnicalIndicatorResults,
     priceAction: PriceActionAnalysis
   ): 'LOW' | 'MEDIUM' | 'HIGH' {
     let riskScore = 0;
@@ -238,8 +229,8 @@ export class SignalAnalysisService {
     if (indicators.rsi > 80 || indicators.rsi < 20) riskScore += 2;
     else if (indicators.rsi > 70 || indicators.rsi < 30) riskScore += 1;
 
-    // High ATR increases risk
-    if (indicators.atr > priceAction.resistance * 0.05) riskScore += 1;
+    // Use price volatility as ATR substitute since TechnicalIndicatorResults doesn't have ATR
+    if (priceAction.volatility > 3) riskScore += 1;
 
     if (riskScore >= 4) return 'HIGH';
     if (riskScore >= 2) return 'MEDIUM';
