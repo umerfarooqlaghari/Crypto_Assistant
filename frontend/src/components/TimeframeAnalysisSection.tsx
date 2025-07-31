@@ -248,10 +248,10 @@ export default function TimeframeAnalysisSection({
       </div>
 
       {/* Header Section - Horizontal Layout */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6 pb-4 border-b border-gray-700">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 pb-4 border-b border-gray-700">
         <div>
-          <div className="text-sm text-gray-400">Exchange</div>
-          <div className="text-lg font-semibold">{exchange}</div>
+          <div className="text-sm text-gray-400">Coin</div>
+          <div className="text-lg font-semibold">{symbol}</div>
         </div>
         <div>
           <div className="text-sm text-gray-400">Current Price</div>
@@ -260,10 +260,6 @@ export default function TimeframeAnalysisSection({
         <div>
           <div className="text-sm text-gray-400">Timeframe</div>
           <div className="text-lg font-semibold">{timeframe}</div>
-        </div>
-        <div>
-          <div className="text-sm text-gray-400">Generated At</div>
-          <div className="text-lg font-semibold">{new Date().toLocaleTimeString()}</div>
         </div>
       </div>
 

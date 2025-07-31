@@ -146,10 +146,10 @@ export default function NotificationSystem({
       }
     }
 
-    // Auto-hide toast notification after 10 seconds
+    // Auto-hide toast notification after 30 seconds
     setTimeout(() => {
       removeNotification(notification.id);
-    }, 10000);
+    }, 30000);
   };
 
   const removeNotification = (id: string) => {
