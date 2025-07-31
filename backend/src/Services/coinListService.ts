@@ -34,6 +34,11 @@ export interface ConfidenceSignal {
   confidence: number; // 0-100
   strength: number; // 0-100
   color: 'green' | 'red' | 'yellow';
+  // Pattern data captured at signal generation time for notification consistency
+  chartPatterns?: any[];
+  candlestickPatterns?: any[];
+  technicalIndicators?: any;
+  reasoning?: string[];
 }
 
 export class CoinListService {
@@ -443,7 +448,13 @@ export class CoinListService {
 
         logDebug(`Generated signal for ${symbol} ${timeframe}: ${signal.action} (confidence: ${signal.confidence}, strength: ${signal.strength})`);
 
-        return { timeframe, signal };
+        return {
+          timeframe,
+          signal,
+          chartPatterns,
+          candlestickPatterns,
+          indicators
+        };
       } catch (error) {
         logDebug(`Error in WebSocket-based technical analysis for ${symbol} ${timeframe}: ${error}`);
         return { timeframe, signal: null };
@@ -464,7 +475,12 @@ export class CoinListService {
           action: signal.action,
           confidence: Math.round(confidencePercentage),
           strength: Math.round(strengthPercentage),
-          color: this.getSignalColor(signal.action, signal.confidence)
+          color: this.getSignalColor(signal.action, signal.confidence),
+          // Capture pattern data at signal generation time for notification consistency
+          chartPatterns: result.value.chartPatterns || undefined,
+          candlestickPatterns: result.value.candlestickPatterns || undefined,
+          technicalIndicators: result.value.indicators || undefined,
+          reasoning: signal.reasoning || undefined
         };
       }
     });

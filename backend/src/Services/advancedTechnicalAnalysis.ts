@@ -271,11 +271,25 @@ export class AdvancedTechnicalAnalysis {
   // Detect candlestick patterns
   detectCandlestickPatterns(ohlcv: number[][]): CandlestickPattern[] {
     const patterns: CandlestickPattern[] = [];
-    
+
     if (ohlcv.length < 3) return patterns;
 
     const recent = ohlcv.slice(-3); // Last 3 candles
-    
+
+    // Log the candle data for debugging pattern inconsistencies
+    logDebug('Candlestick pattern detection', {
+      totalCandles: ohlcv.length,
+      recentCandles: recent.length,
+      lastCandleTime: new Date(recent[recent.length - 1][0]).toISOString(),
+      candleData: recent.map(candle => ({
+        time: new Date(candle[0]).toISOString(),
+        open: candle[1],
+        high: candle[2],
+        low: candle[3],
+        close: candle[4]
+      }))
+    });
+
     // Doji pattern
     const doji = this.detectDoji(recent[recent.length - 1]);
     if (doji) patterns.push(doji);
@@ -295,6 +309,11 @@ export class AdvancedTechnicalAnalysis {
       const star = this.detectStarPattern(recent);
       if (star) patterns.push(star);
     }
+
+    logDebug('Detected candlestick patterns', {
+      patternCount: patterns.length,
+      patterns: patterns.map(p => ({ name: p.name, type: p.type, confidence: p.confidence }))
+    });
 
     return patterns;
   }

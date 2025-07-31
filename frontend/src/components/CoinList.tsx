@@ -12,6 +12,11 @@ interface ConfidenceSignal {
   confidence: number;
   strength: number;
   color: 'green' | 'red' | 'yellow';
+  // Pattern data captured at signal generation time for notification consistency
+  chartPatterns?: any[];
+  candlestickPatterns?: any[];
+  technicalIndicators?: any;
+  reasoning?: string[];
 }
 
 interface CoinListItem {

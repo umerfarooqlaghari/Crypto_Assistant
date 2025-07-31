@@ -244,6 +244,8 @@ export default function NotificationDetailPage() {
                         {index < array.length - 1 && (
                           <Link
                             href={`/analysis/${notification.symbol.toLowerCase()}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
                             className="text-blue-600 hover:text-blue-800 underline font-semibold"
                           >
                             {notification.symbol}
@@ -296,6 +298,8 @@ export default function NotificationDetailPage() {
                   <div className="text-xs text-gray-500 mb-3">Timeframe: {notification.timeframe === 'multi' ? 'Multi' : notification.timeframe || '5m'}</div>
                   <Link
                     href={`/analysis/${notification.symbol.toLowerCase()}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
                   >
                     📊 Go to coin analysis

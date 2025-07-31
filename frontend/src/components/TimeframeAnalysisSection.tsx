@@ -392,35 +392,18 @@ export default function TimeframeAnalysisSection({
               {chartPatterns.map((pattern: any, index: number) => (
                 <div key={index} className="flex justify-between items-start">
                   <div className="flex-1">
-                    <div className="font-medium">{pattern.name || pattern.type || 'Double Top'}</div>
-                    <div className="text-sm text-gray-400">{pattern.description || 'Bearish reversal'}</div>
+                    <div className="font-medium">{pattern.name || pattern.type || 'Unknown Pattern'}</div>
+                    <div className="text-sm text-gray-400">{pattern.description || 'Pattern detected'}</div>
                   </div>
-                  <span className={`inline-block px-2 py-1 rounded text-xs font-medium ml-2 ${getPatternSignalBadge(pattern.type || 'BEARISH')}`}>
-                    {(pattern.type || 'BEARISH').toUpperCase()}
+                  <span className={`inline-block px-2 py-1 rounded text-xs font-medium ml-2 ${getPatternSignalBadge(pattern.type || 'NEUTRAL')}`}>
+                    {(pattern.type || 'NEUTRAL').toUpperCase()}
                   </span>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="space-y-3 mb-6">
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <div className="font-medium">Double Top</div>
-                  <div className="text-sm text-gray-400">Bearish reversal</div>
-                </div>
-                <span className={`inline-block px-2 py-1 rounded text-xs font-medium ml-2 ${getPatternSignalBadge('BEARISH')}`}>
-                  BEARISH
-                </span>
-              </div>
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <div className="font-medium">Descending Triangle</div>
-                  <div className="text-sm text-gray-400">Bearish forecast</div>
-                </div>
-                <span className={`inline-block px-2 py-1 rounded text-xs font-medium ml-2 ${getPatternSignalBadge('BEARISH')}`}>
-                  BEARISH
-                </span>
-              </div>
+            <div className="text-center py-4 mb-6">
+              <p className="text-gray-400 text-sm">No chart patterns detected</p>
             </div>
           )}
 
@@ -432,24 +415,18 @@ export default function TimeframeAnalysisSection({
                 {candlestickPatterns.map((pattern: any, index: number) => (
                   <div key={index} className="flex justify-between items-start">
                     <div className="flex-1">
-                      <div className="font-medium">{pattern.name || pattern.type || 'Evening Star'}</div>
-                      <div className="text-sm text-gray-400">{pattern.description || 'Indicates bearish reversal'}</div>
+                      <div className="font-medium">{pattern.name || pattern.type || 'Unknown Pattern'}</div>
+                      <div className="text-sm text-gray-400">{pattern.description || 'Candlestick pattern detected'}</div>
                     </div>
-                    <span className={`inline-block px-2 py-1 rounded text-xs font-medium ml-2 ${getPatternSignalBadge(pattern.type || 'BEARISH')}`}>
-                      {(pattern.type || 'BEARISH').toUpperCase()}
+                    <span className={`inline-block px-2 py-1 rounded text-xs font-medium ml-2 ${getPatternSignalBadge(pattern.type || 'NEUTRAL')}`}>
+                      {(pattern.type || 'NEUTRAL').toUpperCase()}
                     </span>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <div className="font-medium">Evening Star</div>
-                  <div className="text-sm text-gray-400">Indicates bearish reversal</div>
-                </div>
-                <span className={`inline-block px-2 py-1 rounded text-xs font-medium ml-2 ${getPatternSignalBadge('BEARISH')}`}>
-                  BEARISH
-                </span>
+              <div className="text-center py-4">
+                <p className="text-gray-400 text-sm">No candlestick patterns detected</p>
               </div>
             )}
           </div>
@@ -468,24 +445,9 @@ export default function TimeframeAnalysisSection({
               ))}
             </ul>
           ) : (
-            <ul className="space-y-2">
-              <li className="flex items-start gap-2">
-                <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
-                <span className="text-sm">MACD bearish crossover</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
-                <span className="text-sm">EMA20 below EMA50 (bearish trend)</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
-                <span className="text-sm">Bearish chart pattern: Double Top</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
-                <span className="text-sm">Bearish chart pattern: Descending Triangle</span>
-              </li>
-            </ul>
+            <div className="text-center py-4">
+              <p className="text-gray-400 text-sm">No analysis reasoning available</p>
+            </div>
           )}
         </div>
       </div>
@@ -494,6 +456,8 @@ export default function TimeframeAnalysisSection({
       <div className="mt-6 pt-6 border-t border-gray-700">
         <Link
           href={`/analysis/${symbol.toLowerCase()}`}
+          target="_blank"
+          rel="noopener noreferrer"
           className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
         >
           Go to Coin Analysis for {symbol}

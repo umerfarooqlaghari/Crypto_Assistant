@@ -1,4 +1,4 @@
-import { logInfo, logError } from '../utils/logger';
+import { logInfo, logError, logDebug } from '../utils/logger';
 import { prismaService } from './prismaService';
 import { CoinListItem } from './coinListService';
 import { Server as SocketIOServer } from 'socket.io';
@@ -87,7 +87,7 @@ export class NotificationRuleChecker {
       };
 
       // Check if coin meets rule criteria
-      const matchingSignals = this.evaluateRuleAgainstCoin(typedRule, coin);
+      const matchingSignals = await this.evaluateRuleAgainstCoin(typedRule, coin);
 
       if (matchingSignals.length > 0) {
         // Check if values have changed since last notification
@@ -112,7 +112,7 @@ export class NotificationRuleChecker {
   /**
    * Evaluate if a coin meets the criteria of a notification rule
    */
-  private evaluateRuleAgainstCoin(rule: NotificationRule, coin: CoinListItem): Array<{timeframe: string, signal: any}> {
+  private async evaluateRuleAgainstCoin(rule: NotificationRule, coin: CoinListItem): Promise<Array<{timeframe: string, signal: any}>> {
     const matchingSignals: Array<{timeframe: string, signal: any}> = [];
 
     // Determine which timeframes to check
@@ -138,18 +138,47 @@ export class NotificationRuleChecker {
 
       // Check confidence requirement
       if (rule.minConfidence && signal.confidence < rule.minConfidence) {
+        logInfo(`${coin.symbol} ${timeframe}: Confidence ${signal.confidence}% < required ${rule.minConfidence}% - skipping`);
         continue;
       }
 
       // Check strength requirement
       if (rule.minStrength && signal.strength < rule.minStrength) {
+        logInfo(`${coin.symbol} ${timeframe}: Strength ${signal.strength}% < required ${rule.minStrength}% - skipping`);
         continue;
       }
 
-      // All criteria met for this timeframe
+      // All criteria met for this timeframe - fetch the actual pattern data that was used
+      logInfo(`${coin.symbol} ${timeframe}: Rule criteria met - Confidence: ${signal.confidence}%, Strength: ${signal.strength}%, Action: ${signal.action}`);
+
+      // Capture the exact patterns that triggered this rule at evaluation time
+      // This ensures notification shows the patterns that actually caused the trigger
+      let patternData: any = { chartPatterns: null, candlestickPatterns: null, technicalIndicators: null, reasoning: null };
+
+      // Check if the signal already has pattern data (from coin list processing)
+      if (signal.chartPatterns || signal.candlestickPatterns || signal.technicalIndicators) {
+        patternData = {
+          chartPatterns: signal.chartPatterns || null,
+          candlestickPatterns: signal.candlestickPatterns || null,
+          technicalIndicators: signal.technicalIndicators || null,
+          reasoning: signal.reasoning || null
+        };
+
+        logDebug(`Using existing pattern data for ${coin.symbol} ${timeframe}`, {
+          chartPatterns: signal.chartPatterns?.length || 0,
+          candlestickPatterns: signal.candlestickPatterns?.length || 0,
+          source: 'coin_list_signal'
+        });
+      } else {
+        logDebug(`No pattern data available in signal for ${coin.symbol} ${timeframe}, notification will show basic info only`);
+      }
+
       matchingSignals.push({
         timeframe,
-        signal
+        signal: {
+          ...signal,
+          ...patternData
+        }
       });
     }
 
@@ -192,6 +221,7 @@ export class NotificationRuleChecker {
       let candlestickPatterns = null;
       let analysisReasoning = null;
       let currentPrice = coin.price;
+      // IMPORTANT: Use the same confidence and strength values that triggered the rule
       let notificationConfidence = primarySignal.confidence;
       let notificationStrength = primarySignal.strength;
 
@@ -200,61 +230,23 @@ export class NotificationRuleChecker {
       if (isMultiTimeframe) {
         multiTimeframeAnalysis = {};
 
-        // Get technical analysis for each triggered timeframe and store their actual values
+        // Use the pattern data that was captured during rule evaluation
         for (const matchingSignal of matchingSignals) {
           const timeframe = matchingSignal.timeframe;
           const signal = matchingSignal.signal;
 
-          try {
-            const EnhancedSignalOrchestrator = (await import('./enhancedSignalOrchestrator')).default;
-            const signalOrchestrator = new EnhancedSignalOrchestrator();
-
-            const analysis = await signalOrchestrator.processSignal(
-              coin.symbol,
-              timeframe,
-              'binance'
-            );
-
-            if (analysis && analysis.signal) {
-              // Store the actual fresh analysis data for this timeframe
-              multiTimeframeAnalysis[timeframe] = {
-                technicalIndicators: analysis.signal.technicalIndicators || null,
-                chartPatterns: analysis.signal.chartPatterns || null,
-                candlestickPatterns: analysis.signal.candlestickPatterns || null,
-                reasoning: analysis.signal.reasoning || null,
-                currentPrice: analysis.signal.currentPrice || coin.price,
-                // Store the actual confidence and strength that triggered this timeframe
-                confidence: analysis.signal.confidence > 1 ? analysis.signal.confidence : analysis.signal.confidence * 100,
-                strength: analysis.signal.strength,
-                action: analysis.signal.signal
-              };
-            } else {
-              // Fallback to the signal values from coin list if fresh analysis fails
-              multiTimeframeAnalysis[timeframe] = {
-                technicalIndicators: null,
-                chartPatterns: null,
-                candlestickPatterns: null,
-                reasoning: null,
-                currentPrice: coin.price,
-                confidence: signal.confidence,
-                strength: signal.strength,
-                action: signal.action
-              };
-            }
-          } catch (error) {
-            logError(`Failed to get technical analysis for ${coin.symbol} ${timeframe}`, error as Error);
-            // Fallback to the signal values from coin list
-            multiTimeframeAnalysis[timeframe] = {
-              technicalIndicators: null,
-              chartPatterns: null,
-              candlestickPatterns: null,
-              reasoning: null,
-              currentPrice: coin.price,
-              confidence: signal.confidence,
-              strength: signal.strength,
-              action: signal.action
-            };
-          }
+          // Use the pattern data that was captured when the rule was evaluated
+          multiTimeframeAnalysis[timeframe] = {
+            technicalIndicators: signal.technicalIndicators || null,
+            chartPatterns: signal.chartPatterns || null,
+            candlestickPatterns: signal.candlestickPatterns || null,
+            reasoning: signal.reasoning || null,
+            currentPrice: coin.price,
+            // Use the original confidence and strength that triggered the rule
+            confidence: signal.confidence,
+            strength: signal.strength,
+            action: signal.action
+          };
         }
 
         // For multi-timeframe, use primary timeframe data for top-level notification values
@@ -269,37 +261,22 @@ export class NotificationRuleChecker {
           notificationStrength = primaryData.strength;
         }
       } else {
-        // Single timeframe notification - get fresh analysis for the one timeframe
-        try {
-          const EnhancedSignalOrchestrator = (await import('./enhancedSignalOrchestrator')).default;
-          const signalOrchestrator = new EnhancedSignalOrchestrator();
-
-          const currentAnalysis = await signalOrchestrator.processSignal(
-            coin.symbol,
-            primaryTimeframe,
-            'binance'
-          );
-
-          if (currentAnalysis && currentAnalysis.signal) {
-            const signal = currentAnalysis.signal;
-            technicalIndicators = signal.technicalIndicators || null;
-            chartPatterns = signal.chartPatterns || null;
-            candlestickPatterns = signal.candlestickPatterns || null;
-            analysisReasoning = signal.reasoning || null;
-            currentPrice = signal.currentPrice || coin.price;
-            notificationConfidence = signal.confidence > 1 ? signal.confidence : signal.confidence * 100;
-            notificationStrength = signal.strength;
-          }
-        } catch (error) {
-          logError(`Failed to get current technical analysis for ${coin.symbol}`, error as Error);
-          // Keep the original values from coin list as fallback
-        }
+        // Single timeframe notification - use the pattern data captured during rule evaluation
+        const signal = primarySignal;
+        technicalIndicators = signal.technicalIndicators || null;
+        chartPatterns = signal.chartPatterns || null;
+        candlestickPatterns = signal.candlestickPatterns || null;
+        analysisReasoning = signal.reasoning || null;
+        currentPrice = coin.price;
+        // Confidence and strength are already set from primarySignal
       }
 
       // Create notification title and message with timeframe details
       const timeframeList = matchingSignals.map(ms => ms.timeframe).join(', ');
       const title = `${rule.name}: ${coin.symbol} ${primarySignal.action} Signal`;
       const message = `${coin.symbol} meets ${rule.name} criteria with ${notificationConfidence.toFixed(1)}% confidence and ${notificationStrength.toFixed(1)}% strength across timeframes: ${timeframeList}`;
+
+      logInfo(`Generating notification for ${coin.symbol}: Confidence: ${notificationConfidence}%, Strength: ${notificationStrength}%, Rule requires: Confidence ≥ ${rule.minConfidence || 'N/A'}%, Strength ≥ ${rule.minStrength || 'N/A'}%`);
 
       // Create notification in database with technical analysis data
       const notification = await prisma.notification.create({
