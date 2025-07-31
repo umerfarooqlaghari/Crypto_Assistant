@@ -3,7 +3,7 @@ import { AdvancedTechnicalAnalysis } from './advancedTechnicalAnalysis';
 import { serviceManager } from './serviceManager';
 import { logDebug, logError, logInfo } from '../utils/logger';
 
-import { SUPPORTED_TIMEFRAMES, fetchTop30CoinsFromWebSocket } from '../config/coinConfig';
+import { SUPPORTED_TIMEFRAMES, fetchTop50CoinsFromWebSocket } from '../config/coinConfig';
 
 
 
@@ -83,8 +83,8 @@ export class CoinListService {
 
 
 
-  // Get top 30 coins dynamically from WebSocket (called when user visits coin-list page)
-  async getTop30CoinList(): Promise<CoinListItem[]> {
+  // Get top 50 coins dynamically from WebSocket (called when user visits coin-list page)
+  async getTop50CoinList(): Promise<CoinListItem[]> {
     const startTime = Date.now();
 
     try {
@@ -95,10 +95,10 @@ export class CoinListService {
         return cachedCoinList;
       }
 
-      logInfo('🔄 Fetching fresh top 30 coins from Binance WebSocket');
+      logInfo('🔄 Fetching fresh top 50 coins from Binance WebSocket');
 
-      // Get fresh top 30 coins with their ticker data directly from WebSocket
-      const coinList = await this.generateTop30CoinListFromWebSocket();
+      // Get fresh top 50 coins with their ticker data directly from WebSocket
+      const coinList = await this.generateTop50CoinListFromWebSocket();
 
       // Always ensure BTC and ETH are included with separate WebSocket calls
       const guaranteedCoinList = await this.ensureBTCETHIncluded(coinList);
@@ -150,8 +150,8 @@ export class CoinListService {
         }
       }
 
-      // Get fresh data using the fixed TOP_30_BEST_COINS list
-      const result = await this.generateTop30CoinListFromWebSocket();
+      // Get fresh data using the fixed TOP_50_BEST_COINS list
+      const result = await this.generateTop50CoinListFromWebSocket();
 
       // Update performance stats
       const duration = Date.now() - startTime;
@@ -171,18 +171,18 @@ export class CoinListService {
 
 
 
-  // Generate top 30 coin list from curated list (eliminates all-tickers WebSocket)
-  private async generateTop30CoinListFromWebSocket(): Promise<CoinListItem[]> {
-    logInfo('🔄 Generating top 30 coins from curated list (no all-tickers stream)...');
+  // Generate top 50 coin list from curated list (eliminates all-tickers WebSocket)
+  private async generateTop50CoinListFromWebSocket(): Promise<CoinListItem[]> {
+    logInfo('🔄 Generating top 50 coins from curated list (no all-tickers stream)...');
 
     try {
-      // Get the curated top 30 coins directly (no WebSocket needed)
-      const top30Symbols = await fetchTop30CoinsFromWebSocket();
+      // Get the curated top 50 coins directly (no WebSocket needed)
+      const top50Symbols = await fetchTop50CoinsFromWebSocket();
 
-      logInfo(`Processing ${top30Symbols.length} curated coins for analysis...`);
+      logInfo(`Processing ${top50Symbols.length} curated coins for analysis...`);
 
       // Process each symbol to create CoinListItem with technical analysis
-      const coinListPromises = top30Symbols.map(async (symbol: string) => {
+      const coinListPromises = top50Symbols.map(async (symbol: string) => {
         try {
           // Individual subscriptions will be handled by setupIndividualCoinSubscriptions
           // No need to subscribe here as combined streams are already active

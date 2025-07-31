@@ -25,13 +25,13 @@ export const getCoinListService = (): CoinListService => {
   return coinListService;
 };
 
-// Get top 30 coins dynamically from WebSocket (called when user visits coin-list page)
-export const getTop30CoinList = async (req: Request, res: Response): Promise<void> => {
+// Get top 50 coins dynamically from WebSocket (called when user visits coin-list page)
+export const getTop50CoinList = async (req: Request, res: Response): Promise<void> => {
   try {
-    logInfo('📊 API call: GET /api/coin-list/top30 - Fetching top 30 coins from WebSocket');
+    logInfo('📊 API call: GET /api/coin-list/top50 - Fetching top 50 coins from WebSocket');
 
     const service = getCoinListService();
-    const coinList = await service.getTop30CoinList();
+    const coinList = await service.getTop50CoinList();
 
     logInfo(`✅ Successfully returned ${coinList.length} top coins from WebSocket`);
 
@@ -42,7 +42,40 @@ export const getTop30CoinList = async (req: Request, res: Response): Promise<voi
         count: coinList.length,
         source: 'binance_websocket',
         timestamp: Date.now(),
-        description: 'Top 30 best coins by market cap and liquidity from Binance WebSocket'
+        description: 'Top 50 best coins by market cap and liquidity from Binance WebSocket'
+      }
+    });
+  } catch (error) {
+    logError('Error in getTop50CoinList controller:', error as Error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch top 50 coin list',
+      details: (error as Error).message
+    });
+  }
+};
+
+// Legacy endpoint for backward compatibility (now redirects to top30 for smaller list)
+export const getTop30CoinList = async (req: Request, res: Response): Promise<void> => {
+  try {
+    logInfo('📊 API call: GET /api/coin-list/top30 - Fetching top 30 coins from WebSocket (legacy endpoint)');
+
+    const service = getCoinListService();
+    const coinList = await service.getTop50CoinList();
+
+    // Return only first 30 coins for backward compatibility
+    const top30List = coinList.slice(0, 30);
+
+    logInfo(`✅ Successfully returned ${top30List.length} top coins from WebSocket (legacy endpoint)`);
+
+    res.status(200).json({
+      success: true,
+      data: top30List,
+      metadata: {
+        count: top30List.length,
+        source: 'binance_websocket',
+        timestamp: Date.now(),
+        description: 'Top 30 best coins by market cap and liquidity from Binance WebSocket (legacy endpoint)'
       }
     });
   } catch (error) {
@@ -54,9 +87,6 @@ export const getTop30CoinList = async (req: Request, res: Response): Promise<voi
     });
   }
 };
-
-// Legacy endpoint for backward compatibility
-export const getTop50CoinList = getTop30CoinList;
 
 // Get coin list with confidence indicators
 export const getCoinList = async (req: Request, res: Response): Promise<void> => {
@@ -148,8 +178,8 @@ export const refreshCoinList = async (req: Request, res: Response): Promise<void
     const service = getCoinListService();
     service.clearCurrentCoinList();
 
-    // Use top 30 curated coins instead of legacy volume-based method
-    const freshCoinList = await service.getTop30CoinList();
+    // Use top 50 curated coins instead of legacy volume-based method
+    const freshCoinList = await service.getTop50CoinList();
 
     res.status(200).json({
       success: true,

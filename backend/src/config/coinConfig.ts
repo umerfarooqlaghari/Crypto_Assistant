@@ -6,9 +6,9 @@
 
 
 
-// Top 30 best cryptocurrencies by market cap and established reputation
+// Top 50 best cryptocurrencies by market cap and established reputation
 // These are the most reliable, liquid, and established coins in the crypto market
-const TOP_30_BEST_COINS = [
+const TOP_50_BEST_COINS = [
   // Top 10 - Most established and liquid
   'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'XRPUSDT', 'SOLUSDT', 'ADAUSDT', 'DOGEUSDT', 'TRXUSDT', 'AVAXUSDT', 'LINKUSDT',
 
@@ -16,25 +16,41 @@ const TOP_30_BEST_COINS = [
   'DOTUSDT', 'LTCUSDT', 'SHIBUSDT', 'UNIUSDT', 'ATOMUSDT', 'XLMUSDT', 'VETUSDT', 'FILUSDT', 'ICPUSDT', 'HBARUSDT',
 
   // Top 21-30 - Established projects with good liquidity
-  'ETCUSDT', 'NEARUSDT', 'ALGOUSDT', 'MANAUSDT', 'SANDUSDT', 'AXSUSDT', 'FLOWUSDT', 'EGLDUSDT', 'XTZUSDT', 'CHZUSDT'
+  'ETCUSDT', 'NEARUSDT', 'ALGOUSDT', 'MANAUSDT', 'SANDUSDT', 'AXSUSDT', 'FLOWUSDT', 'EGLDUSDT', 'XTZUSDT', 'CHZUSDT',
+
+  // Top 31-40 - DeFi & Layer 1/2 Protocols
+  'THETAUSDT', 'APEUSDT', 'OPUSDT', 'ARBUSDT', 'INJUSDT', 'SUIUSDT', 'APTUSDT', 'SEIUSDT', 'BCHUSDT', 'PEPEUSDT',
+
+  // Top 41-50 - Gaming, Utility & Infrastructure
+  'AAVEUSDT', 'DASHUSDT', 'ZECUSDT', 'QTUMUSDT', 'GALAUSDT', 'ENJUSDT', 'IMXUSDT', 'GRTUSDT', 'FETUSDT', 'RENDERUSDT'
 ];
 
 
 
-// Get top 30 best coins directly from curated list (eliminates all-tickers stream)
+// Get top 50 best coins directly from curated list (eliminates all-tickers stream)
 // This removes the massive bandwidth consumption from the !ticker@arr stream
-export function fetchTop30CoinsFromWebSocket(): Promise<string[]> {
+export function fetchTop50CoinsFromWebSocket(): Promise<string[]> {
   return new Promise((resolve) => {
-    console.log('Using curated top 30 best coins (no all-tickers stream needed)...');
+    console.log('Using curated top 50 best coins (no all-tickers stream needed)...');
 
     // Return our curated list directly - these are already the best established coins
     // Individual ticker streams will validate availability when they connect
-    const selectedCoins = TOP_30_BEST_COINS.slice(0, 30);
+    const selectedCoins = TOP_50_BEST_COINS.slice(0, 50);
 
     console.log(`✅ Selected ${selectedCoins.length} coins from curated list`);
     console.log('Coins:', selectedCoins.join(', '));
 
     // Resolve immediately - no WebSocket needed, eliminates all-tickers bandwidth usage
+    resolve(selectedCoins);
+  });
+}
+
+// Legacy function for backward compatibility
+export function fetchTop30CoinsFromWebSocket(): Promise<string[]> {
+  return new Promise((resolve) => {
+    console.log('Using curated top 30 best coins (legacy endpoint)...');
+    const selectedCoins = TOP_50_BEST_COINS.slice(0, 30);
+    console.log(`✅ Selected ${selectedCoins.length} coins from curated list (legacy)`);
     resolve(selectedCoins);
   });
 }
@@ -56,20 +72,21 @@ export const EXCLUDED_COINS = [
   'TESTUSDT', 'DEMOUSDT',
 
   // Delisted or problematic coins (getting 403 errors from Binance WebSocket)
-  'FLOWUSDT', 'PAXGUSDT', 'CROUSDT', 'MKRUSDT', 'AAVEUSDT', 'COMPUSDT', 'SNXUSDT', 'YFIUSDT', 'SUSHIUSDT',
-  'CAKEUSDT', 'CHZUSDT', 'ENJUSDT', 'BATUSDT', 'ZRXUSDT', 'OMGUSDT', 'LRCUSDT', 'RLCUSDT', 'STORJUSDT', 'BANDUSDT',
-  'QTUMUSDT', 'ONTUSDT', 'ZILUSDT', 'IOTAUSDT', 'NEOUSDT', 'SLPUSDT', 'CHRUSDT', 'TLMUSDT', 'ALICEUSDT', 'STARUSDT',
-  'ROSEUSDT', 'KAVAUSDT', 'OCEANUSDT', 'NEARUSDT', 'ALGOUSDT', 'MANAUSDT', 'SANDUSDT', 'MATICUSDT', 'APEUSDT',
-  'LDOUSDT', 'OPUSDT', 'ARBUSDT', 'TONUSDT', 'FETUSDT', 'ENSUSDT', 'GRTUSDT', 'BCHUSDT', 'EOSUSDT', 'XMRUSDT',
-  'DASHUSDT', 'ZECUSDT', 'AXSUSDT', 'GALAUSDT'
+  'PAXGUSDT', 'CROUSDT', 'MKRUSDT', 'COMPUSDT', 'SNXUSDT', 'YFIUSDT', 'SUSHIUSDT',
+  'CAKEUSDT', 'BATUSDT', 'ZRXUSDT', 'OMGUSDT', 'LRCUSDT', 'RLCUSDT', 'STORJUSDT', 'BANDUSDT',
+  'ONTUSDT', 'ZILUSDT', 'IOTAUSDT', 'NEOUSDT', 'SLPUSDT', 'CHRUSDT', 'TLMUSDT', 'ALICEUSDT', 'STARUSDT',
+  'ROSEUSDT', 'KAVAUSDT', 'OCEANUSDT', 'LDOUSDT', 'TONUSDT', 'ENSUSDT',
+
+  // Coins with data issues (showing $0.00 price)
+  'XMRUSDT', 'EOSUSDT'
 ];
 
 // Supported timeframes for analysis
 export const SUPPORTED_TIMEFRAMES = ['5m', '15m', '1h', '4h', '1d'];
 
-// Get all coins that should be tracked (top 30 from WebSocket)
+// Get all coins that should be tracked (top 50 from WebSocket)
 export async function getAllTrackedCoins(): Promise<string[]> {
-  const topCoins = await fetchTop30CoinsFromWebSocket();
+  const topCoins = await fetchTop50CoinsFromWebSocket();
   return [...topCoins];
 }
 
@@ -80,7 +97,7 @@ export function isCoinExcluded(symbol: string): boolean {
 
 // Check if a coin is in the top coins list
 export async function isTopCoin(symbol: string): Promise<boolean> {
-  const topCoins = await fetchTop30CoinsFromWebSocket();
+  const topCoins = await fetchTop50CoinsFromWebSocket();
   return topCoins.includes(symbol);
 }
 
@@ -112,7 +129,7 @@ export async function isValidCoinForTracking(symbol: string, volume?: number, pr
 
 // Get configuration summary
 export async function getCoinConfigSummary() {
-  const topCoins = await fetchTop30CoinsFromWebSocket();
+  const topCoins = await fetchTop50CoinsFromWebSocket();
   const trackedCoins = await getAllTrackedCoins();
 
   return {

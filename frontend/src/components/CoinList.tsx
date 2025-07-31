@@ -105,10 +105,10 @@ export default function CoinList() {
       if (refresh) setRefreshing(true);
       else setLoading(true);
 
-      // Always use top30 endpoint which fetches fresh data from Binance WebSocket
-      // This ensures every page visit gets the latest top 30 best coins by market cap and liquidity
+      // Always use top50 endpoint which fetches fresh data from Binance WebSocket
+      // This ensures every page visit gets the latest top 50 best coins by market cap and liquidity
       const [coinsResponse, statsResponse] = await Promise.all([
-        fetch(getApiUrl(`${API_CONFIG.ENDPOINTS.COIN_LIST}/top30`)),
+        fetch(getApiUrl(`${API_CONFIG.ENDPOINTS.COIN_LIST}/top50`)),
         fetch(getApiUrl(API_CONFIG.ENDPOINTS.COIN_LIST_STATS))
       ]);
 

@@ -14,18 +14,18 @@ import {
 const router = Router();
 
 /**
+ * @route GET /api/coin-list/top50
+ * @description Get top 50 best coins dynamically from Binance WebSocket (called when user visits coin-list page)
+ * @returns Array of top 50 best coins with confidence signals for multiple timeframes
+ */
+router.get('/top50', getTop50CoinList);
+
+/**
  * @route GET /api/coin-list/top30
- * @description Get top 30 best coins dynamically from Binance WebSocket (called when user visits coin-list page)
+ * @description Legacy endpoint - returns first 30 coins from top50 for backward compatibility
  * @returns Array of top 30 best coins with confidence signals for multiple timeframes
  */
 router.get('/top30', getTop30CoinList);
-
-/**
- * @route GET /api/coin-list/top50
- * @description Legacy endpoint - redirects to top30 for backward compatibility
- * @returns Array of top 30 best coins with confidence signals for multiple timeframes
- */
-router.get('/top50', getTop50CoinList);
 
 /**
  * @route GET /api/coin-list
