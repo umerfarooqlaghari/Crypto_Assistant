@@ -27,6 +27,19 @@ export interface BinanceKline {
   takerBuyQuoteAssetVolume: string;
 }
 
+export interface OrderBookLevel {
+  price: number;
+  quantity: number;
+}
+
+export interface OrderBookData {
+  symbol: string;
+  bids: OrderBookLevel[];
+  asks: OrderBookLevel[];
+  lastUpdateId: number;
+  timestamp: number;
+}
+
 export interface BinanceTicker {
   symbol: string;
   price: string;
@@ -59,6 +72,11 @@ export class BinanceService {
   private klineSubscribers: Map<string, Set<(ohlcv: number[][]) => void>> = new Map();
   private klineConnections: Map<string, WebSocket> = new Map();
   private readonly MAX_KLINE_BUFFER = 100; // Keep 100 candles in buffer
+
+  // Order book data caching for WebSocket streams
+  private orderBookCache: Map<string, OrderBookData> = new Map(); // key: symbol, value: order book
+  private orderBookSubscribers: Map<string, Set<(orderBook: OrderBookData) => void>> = new Map();
+  private orderBookConnections: Map<string, WebSocket> = new Map();
 
   // Track API usage statistics
   private cacheHits = 0;
@@ -1137,6 +1155,143 @@ export class BinanceService {
     }
   }
 
+  // Get order book data via REST API
+  async getOrderBook(symbol: string, limit: number = 20): Promise<OrderBookData> {
+    try {
+      const response = await axios.get(`${this.baseURL}/depth`, {
+        params: { symbol, limit }
+      });
+
+      const orderBook: OrderBookData = {
+        symbol,
+        bids: response.data.bids.map((bid: [string, string]) => ({
+          price: parseFloat(bid[0]),
+          quantity: parseFloat(bid[1])
+        })),
+        asks: response.data.asks.map((ask: [string, string]) => ({
+          price: parseFloat(ask[0]),
+          quantity: parseFloat(ask[1])
+        })),
+        lastUpdateId: response.data.lastUpdateId,
+        timestamp: Date.now()
+      };
+
+      // Update cache
+      this.orderBookCache.set(symbol, orderBook);
+
+      return orderBook;
+    } catch (error) {
+      logError(`Error fetching order book for ${symbol}`, error as Error);
+      throw error;
+    }
+  }
+
+  // Subscribe to order book updates via WebSocket
+  subscribeToOrderBook(symbol: string, callback: (orderBook: OrderBookData) => void) {
+    if (!this.orderBookSubscribers.has(symbol)) {
+      this.orderBookSubscribers.set(symbol, new Set());
+      this.startOrderBookStream(symbol);
+    }
+    this.orderBookSubscribers.get(symbol)!.add(callback);
+
+    // Send current cached data if available
+    const cached = this.orderBookCache.get(symbol);
+    if (cached) {
+      callback(cached);
+    }
+  }
+
+  // Unsubscribe from order book updates
+  unsubscribeFromOrderBook(symbol: string, callback: (orderBook: OrderBookData) => void) {
+    const subscribers = this.orderBookSubscribers.get(symbol);
+    if (subscribers) {
+      subscribers.delete(callback);
+      if (subscribers.size === 0) {
+        this.orderBookSubscribers.delete(symbol);
+        this.closeOrderBookStream(symbol);
+      }
+    }
+  }
+
+  // Start order book WebSocket stream
+  private startOrderBookStream(symbol: string) {
+    const wsUrl = `${this.wsBaseURL}/${symbol.toLowerCase()}@depth20@100ms`;
+    const ws = new WebSocket(wsUrl);
+
+    ws.on('open', () => {
+      logDebug(`Connected to order book stream for ${symbol}`);
+    });
+
+    ws.on('message', (data: WebSocket.Data) => {
+      try {
+        const message = JSON.parse(data.toString());
+        this.handleOrderBookUpdate(symbol, message);
+      } catch (error) {
+        logError(`Error parsing order book message for ${symbol}`, error as Error);
+      }
+    });
+
+    ws.on('error', (error) => {
+      logError(`Order book WebSocket error for ${symbol}`, error);
+    });
+
+    ws.on('close', () => {
+      logDebug(`Order book WebSocket closed for ${symbol}`);
+      // Attempt to reconnect after 5 seconds
+      setTimeout(() => {
+        if (this.orderBookSubscribers.has(symbol)) {
+          this.startOrderBookStream(symbol);
+        }
+      }, 5000);
+    });
+
+    this.orderBookConnections.set(symbol, ws);
+  }
+
+  // Handle order book update
+  private handleOrderBookUpdate(symbol: string, message: any) {
+    try {
+      const orderBook: OrderBookData = {
+        symbol,
+        bids: message.bids.map((bid: [string, string]) => ({
+          price: parseFloat(bid[0]),
+          quantity: parseFloat(bid[1])
+        })),
+        asks: message.asks.map((ask: [string, string]) => ({
+          price: parseFloat(ask[0]),
+          quantity: parseFloat(ask[1])
+        })),
+        lastUpdateId: message.lastUpdateId,
+        timestamp: Date.now()
+      };
+
+      // Update cache
+      this.orderBookCache.set(symbol, orderBook);
+
+      // Notify subscribers
+      const subscribers = this.orderBookSubscribers.get(symbol);
+      if (subscribers) {
+        subscribers.forEach(callback => callback(orderBook));
+      }
+    } catch (error) {
+      logError(`Error handling order book update for ${symbol}`, error as Error);
+    }
+  }
+
+  // Close order book stream
+  private closeOrderBookStream(symbol: string) {
+    const ws = this.orderBookConnections.get(symbol);
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.close();
+    }
+    this.orderBookConnections.delete(symbol);
+  }
+
+  // Get cached order book data
+  getCachedOrderBook(symbol: string): OrderBookData | null {
+    return this.orderBookCache.get(symbol) || null;
+  }
+
   // Get cached price data
   getCachedPrice(symbol: string): BinanceTicker | null {
     return this.allTickersCache.get(symbol) || null;
@@ -1171,12 +1326,21 @@ export class BinanceService {
     });
     this.klineConnections.clear();
 
+    // Close order book connections
+    this.orderBookConnections.forEach((ws, symbol) => {
+      ws.close();
+      logInfo(`Closed order book WebSocket connection: ${symbol}`);
+    });
+    this.orderBookConnections.clear();
+
     // Clear subscribers and caches
     this.subscribers.clear();
     this.allTickersSubscribers.clear();
     this.klineSubscribers.clear();
+    this.orderBookSubscribers.clear();
     this.allTickersCache.clear();
     this.klineCache.clear();
+    this.orderBookCache.clear();
 
     // Reset connection state
     this.isAllTickersConnected = false;

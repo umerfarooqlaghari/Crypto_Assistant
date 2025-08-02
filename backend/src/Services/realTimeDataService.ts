@@ -3,6 +3,7 @@ import { Server as HTTPServer } from 'http';
 import cron from 'node-cron';
 import { BinanceService } from './binanceService';
 import { AdvancedTechnicalAnalysis, TradingSignal } from './advancedTechnicalAnalysis';
+import { EarlyWarningService } from './earlyWarningService';
 import { serviceManager } from './serviceManager';
 import { logDebug, logError, logInfo } from '../utils/logger';
 import { config } from '../config/config';
@@ -31,11 +32,13 @@ export class RealTimeDataService {
   private io: SocketIOServer;
   private binanceService: BinanceService;
   private technicalAnalysis: AdvancedTechnicalAnalysis;
+  private earlyWarningService: EarlyWarningService;
   private subscriptions: Map<string, ClientSubscription> = new Map();
   private activeSymbols: Set<string> = new Set();
   private dataCache: Map<string, RealTimeData> = new Map();
   private analysisCache: Map<string, any> = new Map();
   private updateInterval: NodeJS.Timeout | null = null;
+  private earlyWarningInterval: NodeJS.Timeout | null = null;
 
   constructor(server: HTTPServer) {
     this.io = new SocketIOServer(server, {
@@ -51,10 +54,18 @@ export class RealTimeDataService {
     this.binanceService = serviceManager.getBinanceService();
     this.technicalAnalysis = serviceManager.getTechnicalAnalysisService();
 
+    // Initialize Early Warning Service
+    this.earlyWarningService = new EarlyWarningService(
+      this.binanceService,
+      this.technicalAnalysis,
+      this.io
+    );
+
     this.initializeSocketHandlers();
     this.startDataUpdates();
+    this.startEarlyWarningAnalysis();
 
-    logInfo('Real-time data service initialized with shared services');
+    logInfo('Real-time data service initialized with shared services and early warning system');
   }
 
   // Getter for socket.io instance
@@ -482,10 +493,58 @@ export class RealTimeDataService {
     return this.io.sockets.sockets.size;
   }
 
+  // Start early warning analysis
+  private startEarlyWarningAnalysis() {
+    // Add default symbols for early warning analysis (top 30 coins)
+    const defaultSymbols = [
+      'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT', 'SOLUSDT', 'DOGEUSDT', 'DOTUSDT', 'MATICUSDT', 'SHIBUSDT',
+      'AVAXUSDT', 'LTCUSDT', 'UNIUSDT', 'LINKUSDT', 'ATOMUSDT', 'ETCUSDT', 'XLMUSDT', 'BCHUSDT', 'FILUSDT', 'TRXUSDT',
+      'VETUSDT', 'ICPUSDT', 'FTMUSDT', 'HBARUSDT', 'NEARUSDT', 'ALGOUSDT', 'FLOWUSDT', 'XTZUSDT', 'EGLDUSDT', 'SANDUSDT'
+    ];
+
+    // Add default symbols to active symbols for early warning analysis
+    defaultSymbols.forEach(symbol => this.activeSymbols.add(symbol));
+    logInfo(`Added ${defaultSymbols.length} default symbols for early warning analysis`);
+
+    // Run early warning analysis every 30 seconds
+    this.earlyWarningInterval = setInterval(async () => {
+      try {
+        const symbols = Array.from(this.activeSymbols);
+        logDebug(`🚨 Running early warning analysis for ${symbols.length} symbols`);
+
+        // Analyze each active symbol for early warnings
+        const analysisPromises = symbols.map(async (symbol) => {
+          try {
+            await this.earlyWarningService.analyzeSymbol(symbol);
+          } catch (error) {
+            logError(`Error in early warning analysis for ${symbol}`, error as Error);
+          }
+        });
+
+        await Promise.allSettled(analysisPromises);
+        logDebug(`Early warning analysis completed for ${symbols.length} symbols`);
+
+      } catch (error) {
+        logError('Error in early warning analysis cycle', error as Error);
+      }
+    }, 30000); // 30 seconds
+
+    logInfo('Early warning analysis started (30-second intervals)');
+  }
+
+  // Get early warning service instance
+  public getEarlyWarningService(): EarlyWarningService {
+    return this.earlyWarningService;
+  }
+
   // Cleanup method
   shutdown() {
     if (this.updateInterval) {
       clearInterval(this.updateInterval);
+    }
+
+    if (this.earlyWarningInterval) {
+      clearInterval(this.earlyWarningInterval);
     }
 
     this.binanceService.closeConnections();

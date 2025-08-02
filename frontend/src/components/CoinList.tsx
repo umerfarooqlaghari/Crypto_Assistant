@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { io } from 'socket.io-client';
 import { getApiUrl, getWebSocketUrl, API_CONFIG } from '../utils/api';
 import NotificationSystem from './NotificationSystem';
+import EarlyWarningSystem from './EarlyWarningSystem';
 
 interface ConfidenceSignal {
   action: 'BUY' | 'SELL' | 'HOLD';
@@ -179,11 +180,45 @@ export default function CoinList() {
           })
         });
 
+        // Also check early warning alert rules
+        const earlyWarningResponse = await fetch(getApiUrl('/api/early-warning-alert-rules/check'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            coins: currentCoins.map((coin: CoinListItem) => ({
+              symbol: coin.symbol,
+              name: coin.name,
+              price: coin.price,
+              priceChange24h: coin.priceChange24h,
+              volume: coin.volume,
+              confidence: coin.confidence,
+              lastUpdated: coin.lastUpdated
+            }))
+          })
+        });
+
         if (response.ok) {
           const result = await response.json();
           console.log('🔔 Notification cron: Rules checked successfully', result);
         } else {
           console.error('🔔 Notification cron: Failed to check rules', response.status);
+        }
+
+        // Handle early warning alert rules response
+        if (earlyWarningResponse.ok) {
+          const earlyWarningResult = await earlyWarningResponse.json();
+          if (earlyWarningResult.success && earlyWarningResult.data.length > 0) {
+            console.log('🚨 Early warning alert rules triggered:', earlyWarningResult.data.length, 'alerts');
+
+            // Show toast notifications for triggered early warning alerts
+            earlyWarningResult.data.forEach((alert: any) => {
+              showEarlyWarningToast(alert);
+            });
+          }
+        } else {
+          console.error('🚨 Early warning alert rule check failed', earlyWarningResponse.status);
         }
       } catch (error) {
         console.error('🔔 Notification cron: Error checking rules', error);
@@ -197,6 +232,111 @@ export default function CoinList() {
       console.log('🔔 Notification cron job stopped');
     };
   }, [notificationCronActive]); // Remove coins dependency
+
+
+
+  // Function to reposition all toasts after one is removed
+  const repositionToasts = () => {
+    const toasts = document.querySelectorAll('.early-warning-toast');
+    toasts.forEach((toast, index) => {
+      const element = toast as HTMLElement;
+      element.style.top = `${16 + (index * 140)}px`; // Increased spacing from 120px to 140px
+    });
+  };
+
+  // Clear all existing toasts
+  const clearAllToasts = () => {
+    const toasts = document.querySelectorAll('.early-warning-toast');
+    toasts.forEach(toast => toast.remove());
+  };
+
+  // Make repositionToasts available globally for onclick handlers
+  useEffect(() => {
+    (window as any).repositionToasts = repositionToasts;
+    (window as any).clearAllToasts = clearAllToasts;
+
+    // Clear any existing toasts on component mount
+    clearAllToasts();
+
+    return () => {
+      delete (window as any).repositionToasts;
+      delete (window as any).clearAllToasts;
+    };
+  }, []);
+
+  // Show early warning toast notification (matching notification system design)
+  const showEarlyWarningToast = (alert: any) => {
+    // Get existing toasts to calculate position
+    const existingToasts = document.querySelectorAll('.early-warning-toast');
+    const topOffset = 16 + (existingToasts.length * 140); // 16px base + 140px per toast (increased spacing)
+
+    // Create enhanced toast element matching notification system design
+    const toast = document.createElement('div');
+    const toastId = `early-warning-toast-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+
+    // Priority-based gradient colors (matching notification system)
+    const priorityGradient = alert.priority === 'HIGH'
+      ? 'from-red-500 to-red-600'
+      : alert.priority === 'MEDIUM'
+      ? 'from-yellow-500 to-yellow-600'
+      : 'from-green-500 to-green-600';
+
+    toast.id = toastId;
+    toast.className = `early-warning-toast fixed right-4 w-full max-w-sm bg-gradient-to-r ${priorityGradient} shadow-2xl rounded-xl border border-white/20 backdrop-blur-sm transform transition-all duration-500 ease-out z-50 animate-slide-in-right`;
+    toast.style.top = `${topOffset}px`;
+    toast.style.animationDelay = `${existingToasts.length * 100}ms`;
+
+    // Alert type styling
+    const alertTypeIcon = alert.alertType === 'PUMP_LIKELY' ? '🚀' : alert.alertType === 'DUMP_LIKELY' ? '📉' : '⚠️';
+    const alertTypeText = alert.alertType === 'PUMP_LIKELY' ? 'PUMP LIKELY' : alert.alertType === 'DUMP_LIKELY' ? 'DUMP LIKELY' : 'NEUTRAL';
+
+    toast.innerHTML = `
+      <div class="p-4 text-white">
+        <div class="flex items-start justify-between mb-3">
+          <div class="flex items-center space-x-2">
+            <span class="text-xl">${alertTypeIcon}</span>
+            <div>
+              <div class="font-bold text-lg">Early Warning</div>
+              <div class="text-sm opacity-90">${alert.symbol.replace('USDT', '')}</div>
+            </div>
+          </div>
+          <button onclick="this.parentElement.parentElement.remove(); repositionToasts();" class="text-white/80 hover:text-white transition-colors p-1 rounded-full hover:bg-white/10">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="bg-white/20 px-2 py-1 rounded-full text-xs font-medium">${alertTypeText}</span>
+            <span class="text-xs opacity-90">${alert.priority} Priority</span>
+          </div>
+
+          <div class="flex items-center justify-between text-xs">
+            <span class="bg-white/15 px-2 py-1 rounded">Confidence: ${alert.confidence}%</span>
+            <span class="bg-white/15 px-2 py-1 rounded">ETA: ${alert.timeEstimate}</span>
+          </div>
+
+          <div class="text-xs opacity-75 pt-1 border-t border-white/20">
+            Rule: ${alert.ruleName}
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(toast);
+
+    console.log('🚨 Early Warning Toast displayed for', alert.symbol, alert.alertType, `(${alert.priority} priority)`);
+
+    // Auto-remove after 30 seconds
+    setTimeout(() => {
+      if (toast.parentElement) {
+        toast.remove();
+        repositionToasts();
+      }
+    }, 30000);
+  };
 
   // Initialize WebSocket connection for real-time updates
   useEffect(() => {
@@ -247,6 +387,12 @@ export default function CoinList() {
         )
       );
       setLastUpdate(new Date(data.timestamp));
+    });
+
+    // Listen for early warning toast alerts
+    newSocket.on('earlyWarningToast', (data: any) => {
+      console.log('🚨 Early warning toast received:', data.symbol, data.alertType);
+      showEarlyWarningToast(data);
     });
 
 
@@ -446,6 +592,9 @@ export default function CoinList() {
           <div className="flex items-center gap-4">
             {/* Notification System - Moved to left side */}
             <NotificationSystem />
+
+            {/* Early Warning System */}
+            <EarlyWarningSystem />
 
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-4">

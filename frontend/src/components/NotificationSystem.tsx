@@ -10,7 +10,7 @@ interface NotificationPayload {
   id: string;
   title: string;
   message: string;
-  type: 'STRONG_SIGNAL' | 'ALERT' | 'WARNING';
+  type: 'STRONG_SIGNAL' | 'ALERT' | 'WARNING' | 'EARLY_WARNING_ALERT';
   priority: 'LOW' | 'MEDIUM' | 'HIGH';
   hasVisual: boolean;
   symbol: string;
@@ -21,6 +21,30 @@ interface NotificationPayload {
   ruleId?: string;
   ruleName?: string;
   createdAt: string;
+}
+
+interface EarlyWarningAlertPayload {
+  id: string;
+  type: 'EARLY_WARNING_ALERT';
+  symbol: string;
+  alertType: string;
+  confidence: number;
+  message: string;
+  priority: string;
+  timeEstimate: string;
+  triggeredBy: string[];
+  phases: string[];
+  phaseScores: {
+    phase1: number;
+    phase2: number;
+    phase3: number;
+  };
+  currentPrice: number;
+  volume24h?: number;
+  priceChange24h?: number;
+  enableToast: boolean;
+  enableSound: boolean;
+  timestamp: string;
 }
 
 interface NotificationSystemProps {
@@ -51,6 +75,10 @@ export default function NotificationSystem({
 
     socketConnection.on('notification', (notification: NotificationPayload) => {
       handleNewNotification(notification);
+    });
+
+    socketConnection.on('earlyWarningAlert', (alert: EarlyWarningAlertPayload) => {
+      handleEarlyWarningAlert(alert);
     });
 
     socketConnection.on('disconnect', () => {
@@ -150,6 +178,41 @@ export default function NotificationSystem({
     setTimeout(() => {
       removeNotification(notification.id);
     }, 30000);
+  };
+
+  const handleEarlyWarningAlert = (alert: EarlyWarningAlertPayload) => {
+    // Convert early warning alert to notification format
+    const notification: NotificationPayload = {
+      id: alert.id,
+      title: `🚨 Early Warning: ${alert.symbol.replace('USDT', '')}`,
+      message: alert.message,
+      type: 'EARLY_WARNING_ALERT',
+      priority: alert.priority as 'LOW' | 'MEDIUM' | 'HIGH',
+      hasVisual: alert.enableToast,
+      symbol: alert.symbol,
+      signal: alert.alertType,
+      confidence: alert.confidence,
+      timeframe: alert.timeEstimate,
+      createdAt: alert.timestamp
+    };
+
+    // Handle as regular notification if toast is enabled
+    if (alert.enableToast) {
+      handleNewNotification(notification);
+    }
+
+    // Play sound if enabled
+    if (alert.enableSound && 'Audio' in window) {
+      try {
+        const audio = new Audio('/notification-sound.mp3'); // You'll need to add this file
+        audio.volume = 0.5;
+        audio.play().catch(e => console.log('Could not play notification sound:', e));
+      } catch (error) {
+        console.log('Audio not supported or file not found');
+      }
+    }
+
+    console.log('🚨 Early Warning Alert:', alert);
   };
 
   const removeNotification = (id: string) => {

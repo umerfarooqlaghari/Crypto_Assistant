@@ -10,6 +10,9 @@ import enhancedSignalRoutes from './routes/enhancedSignalRoutes';
 import coinListRoutes from './routes/coinListRoutes';
 import adminRoutes from './routes/adminRoutes';
 import notificationRoutes from './routes/notificationRoutes';
+import earlyWarningRoutes from './routes/earlyWarningRoutes';
+
+import earlyWarningAlertRuleRoutes, { setSocketIO, setRealTimeService as setEarlyWarningRealTimeService } from './routes/earlyWarningAlertRules';
 import { RealTimeDataService } from './Services/realTimeDataService';
 import { cleanupCoinListService, setRealTimeService } from './controllers/coinListController';
 import prismaService from './Services/prismaService';
@@ -40,6 +43,10 @@ async function initializeServices() {
 
     // Connect notification rule checker to socket.io for real-time notifications
     notificationRuleChecker.setSocketIO(realTimeService.getSocketIO());
+
+    // Connect early warning alert rules to socket.io for toast notifications
+    setSocketIO(realTimeService.getSocketIO());
+    setEarlyWarningRealTimeService(realTimeService);
 
     return realTimeService;
   } catch (error) {
@@ -115,6 +122,9 @@ app.use('/api/exchange-prices', signalExchangePriceRoutes);
 app.use('/api/coin-list', coinListRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/early-warnings', earlyWarningRoutes);
+
+app.use('/api/early-warning-alert-rules', earlyWarningAlertRuleRoutes);
 // app.use('/api/portfolio', portfolioRoutes);
 // app.use('/api/exchanges', exchangeRoutes);
 

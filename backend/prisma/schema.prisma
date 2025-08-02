@@ -130,3 +130,162 @@ model Notification {
   @@index([type, priority, createdAt])
   @@index([symbol, signal, createdAt])
 }
+
+// Early Warning Alerts for pump/dump predictions
+model EarlyWarningAlert {
+  id                   String   @id @default(cuid())
+
+  // Basic alert info
+  symbol               String
+  exchange             String   @default("binance")
+  alertType            String   // 'PUMP_LIKELY', 'DUMP_LIKELY', 'NEUTRAL'
+
+  // Confidence and timing
+  confidence           Float    // 0-100 overall confidence score
+  timeEstimateMin      Int      // Minimum time estimate in minutes
+  timeEstimateMax      Int      // Maximum time estimate in minutes
+
+  // Phase 1: Volume & Momentum Detection
+  volumeSpike          Json?    // { detected: boolean, currentVolume: number, avgVolume: number, ratio: number, priceChange: number }
+  rsiMomentum          Json?    // { detected: boolean, currentRSI: number, previousRSI: number, velocity: number, timeframe: string }
+  emaConvergence       Json?    // { detected: boolean, ema20: number, ema50: number, gap: number, momentum: number }
+
+  // Phase 2: Order Flow Analysis
+  bidAskImbalance      Json?    // { detected: boolean, buyPressure: number, sellPressure: number, ratio: number, largeOrders: array }
+  priceAction          Json?    // { detected: boolean, spreadChange: number, unusualOrders: array, icebergOrders: array }
+
+  // Phase 3: Whale Activity
+  whaleActivity        Json?    // { detected: boolean, transfers: array, totalAmount: number, direction: string, exchanges: array }
+
+  // Scoring breakdown
+  phase1Score          Float    @default(0) // Volume & Momentum score (0-100)
+  phase2Score          Float    @default(0) // Order Flow score (0-100)
+  phase3Score          Float    @default(0) // Whale Activity score (0-100)
+
+  // Triggered conditions
+  triggeredBy          Json     // Array of trigger names: ["Volume Spike", "RSI Momentum", "Whale Activity"]
+
+  // Market data at alert time
+  currentPrice         Float
+  volume24h            Float?
+  priceChange24h       Float?
+
+  // Alert status
+  isActive             Boolean  @default(true)
+  isResolved           Boolean  @default(false)
+  resolvedAt           DateTime?
+  actualOutcome        String?  // 'PUMP_CONFIRMED', 'DUMP_CONFIRMED', 'FALSE_SIGNAL', 'PENDING'
+
+  // Performance tracking
+  accuracyScore        Float?   // 0-100 score based on actual outcome
+  responseTime         Int?     // Time in minutes from alert to actual move
+
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@map("early_warning_alerts")
+  @@index([symbol, alertType, createdAt])
+  @@index([confidence, createdAt])
+  @@index([isActive, isResolved, createdAt])
+  @@index([actualOutcome, accuracyScore])
+}
+
+
+
+
+
+// Early Warning Alert Rules for pump/dump prediction alerts
+model EarlyWarningAlertRule {
+  id                String   @id @default(cuid())
+  name              String   // User-friendly name for the rule
+  description       String?  // Optional description
+
+  // Rule conditions
+  minConfidence     Float    // Minimum confidence required (0-100)
+  alertTypes        Json     // Array of alert types to monitor: ["PUMP_LIKELY", "DUMP_LIKELY"]
+  requiredPhases    Json?    // Array of phases that must trigger: ["phase1", "phase2", "phase3"] or null for any
+  minPhaseScore     Float?   // Minimum score required for individual phases (0-100)
+
+  // Advanced conditions
+  minTimeEstimate   Int?     // Minimum time estimate in minutes
+  maxTimeEstimate   Int?     // Maximum time estimate in minutes
+  requiredTriggers  Json?    // Array of required trigger types: ["Volume Spike", "RSI Momentum", "EMA Convergence", "Whale Activity"]
+
+  // Alert settings
+  priority          String   @default("MEDIUM") // 'LOW', 'MEDIUM', 'HIGH'
+  enableToast       Boolean  @default(true)     // Show toast notification
+  enableSound       Boolean  @default(true)     // Play sound notification
+
+  // Status
+  isActive          Boolean  @default(true)
+  lastTriggered     DateTime?
+  triggerCount      Int      @default(0)
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  triggeredAlerts   EarlyWarningAlertHistory[]
+
+  @@map("early_warning_alert_rules")
+  @@index([isActive])
+  @@index([minConfidence, isActive])
+  @@index([priority, isActive])
+}
+
+// Early Warning Alert History for tracking triggered early warning alerts
+model EarlyWarningAlertHistory {
+  id                String   @id @default(cuid())
+
+  // Alert rule reference
+  ruleId            String
+  ruleName          String
+  rule              EarlyWarningAlertRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  // Early warning alert reference
+  earlyWarningId    String   // Reference to the EarlyWarningAlert that triggered this
+
+  // Coin and alert info
+  symbol            String
+  alertType         String   // 'PUMP_LIKELY', 'DUMP_LIKELY'
+  confidence        Float    // Confidence percentage (0-100)
+  timeEstimateMin   Int      // Time estimate minimum in minutes
+  timeEstimateMax   Int      // Time estimate maximum in minutes
+
+  // Phase scores that triggered the alert
+  phase1Score       Float
+  phase2Score       Float
+  phase3Score       Float
+  triggeredBy       Json     // Array of trigger names that caused this alert
+
+  // Market data at alert time
+  currentPrice      Float
+  volume24h         Float?
+  priceChange24h    Float?
+
+  // Phase analysis data (stored for reference)
+  volumeSpike       Json?    // Volume spike analysis data
+  rsiMomentum       Json?    // RSI momentum analysis data
+  emaConvergence    Json?    // EMA convergence analysis data
+  bidAskImbalance   Json?    // Bid/ask imbalance analysis data
+  priceAction       Json?    // Price action analysis data
+  whaleActivity     Json?    // Whale activity analysis data
+
+  // Alert details
+  message           String
+  priority          String
+
+  // Notification status
+  toastShown        Boolean  @default(false)
+  isRead            Boolean  @default(false)
+  readAt            DateTime?
+
+  // Timestamps
+  triggeredAt       DateTime @default(now())
+
+  @@map("early_warning_alert_history")
+  @@index([symbol, triggeredAt])
+  @@index([ruleId, triggeredAt])
+  @@index([alertType, confidence, triggeredAt])
+  @@index([isRead, triggeredAt])
+}
